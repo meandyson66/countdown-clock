@@ -3,10 +3,35 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="refresh" content="0; url=app.html">
-  <title>特码推荐</title>
+  <title>特码推荐 1.7</title>
+  <link rel="stylesheet" href="app.css">
+  <style>
+    .landing { max-width: 520px; margin: 0 auto; padding: 32px 18px 48px; text-align: center; }
+    .landing h1 { font-size: 1.65rem; margin: 0 0 8px; color: #3B2230; }
+    .landing .sub { color: rgba(59, 34, 48, 0.72); font-size: 0.95rem; line-height: 1.6; margin-bottom: 24px; }
+    .actions { display: flex; flex-direction: column; gap: 12px; }
+    .actions a {
+      display: block; padding: 14px 18px; border-radius: 999px; text-decoration: none;
+      font-weight: 600; border: 1px solid rgba(225, 29, 72, 0.2);
+    }
+    .actions a.primary { background: linear-gradient(135deg, #FF6B94, #E11D48); color: #fff; border: none; }
+    .actions a.secondary { background: rgba(255,255,255,0.85); color: #3B2230; }
+    .fine { font-size: 0.82rem; color: rgba(59, 34, 48, 0.6); margin-top: 20px; line-height: 1.55; }
+    .fine code { font-size: 0.8rem; }
+  </style>
 </head>
 <body>
-  <p><a href="app.html">打开特码推荐</a></p>
+  <main class="landing">
+    <section class="panel">
+      <h1>特码推荐 1.7</h1>
+      <p class="sub">新澳门 21:32 · 老澳门 22:32。浏览器或安卓均可使用，数据在本地计算，账本保存在本机。</p>
+      <div class="actions">
+        <a class="primary" href="app.html">在网页中打开</a>
+        <a class="secondary" href="https://github.com/meandyson66/countdown-clock/releases/latest/download/macau-recommend-1.7.apk">下载安卓安装包（APK）</a>
+        <a class="secondary" href="https://github.com/meandyson66/countdown-clock/tree/main/recommend-web">在 GitHub 查看源码</a>
+      </div>
+      <p class="fine">安卓：安装后需联网读取开奖；若系统拦截未知来源，请在设置中允许安装。网页版与 APK 逻辑一致，互不需要电脑后端。</p>
+    </section>
+  </main>
 </body>
 </html>
