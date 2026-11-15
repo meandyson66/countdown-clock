@@ -1,0 +1,15 @@
+# Android / Gradle
+android/.gradle/
+android/**/build/
+android/local.properties
+
+# Python 推荐（本地密钥与虚拟环境）
+recommend/.venv/
+recommend/.env
+recommend/__pycache__/
+recommend/cache/
+
+# 安装包与杂项
+*.apk
+physics-2048/
+parkour-3d/

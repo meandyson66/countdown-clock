@@ -148,34 +148,47 @@ function maxValue(obj) {
 }
 
 function httpGet(url) {
-  return paint().then(() => {
-    if (!window.AndroidBridge || !AndroidBridge.beginFetch || !AndroidBridge.readChunk) {
-      throw new Error("原生网络接口未加载。请安装桌面上的 1.7 安装包，不要打开旧版本。");
-    }
-    let head = "";
-    try {
-      head = AndroidBridge.beginFetch(url) || "";
-    } catch (error) {
-      throw new Error("原生请求异常：" + (error && error.message ? error.message : error));
-    }
-    if (!head.startsWith("OK")) {
-      const lines = String(head || "ERR\n0\n没有返回").split("\n");
-      const status = lines[1] || "0";
-      const detail = lines.slice(2).join("\n") || "未知错误";
-      throw new Error("HTTP " + status + " " + detail + "\n" + url);
-    }
-    let text = "";
-    try {
-      for (;;) {
-        const part = AndroidBridge.readChunk();
-        if (!part) break;
-        text += part;
+  return paint().then(async () => {
+    if (window.AndroidBridge && AndroidBridge.beginFetch && AndroidBridge.readChunk) {
+      let head = "";
+      try {
+        head = AndroidBridge.beginFetch(url) || "";
+      } catch (error) {
+        throw new Error("原生请求异常：" + (error && error.message ? error.message : error));
       }
-    } catch (error) {
-      throw new Error("读取响应失败：" + (error && error.message ? error.message : error) + "\n" + url);
+      if (!head.startsWith("OK")) {
+        const lines = String(head || "ERR\n0\n没有返回").split("\n");
+        const status = lines[1] || "0";
+        const detail = lines.slice(2).join("\n") || "未知错误";
+        throw new Error("HTTP " + status + " " + detail + "\n" + url);
+      }
+      let text = "";
+      try {
+        for (;;) {
+          const part = AndroidBridge.readChunk();
+          if (!part) break;
+          text += part;
+        }
+      } catch (error) {
+        throw new Error("读取响应失败：" + (error && error.message ? error.message : error) + "\n" + url);
+      }
+      if (!text) throw new Error("接口返回空内容\n" + url);
+      return text;
     }
-    if (!text) throw new Error("接口返回空内容\n" + url);
-    return text;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000);
+    try {
+      const res = await fetch(url, { signal: controller.signal });
+      if (!res.ok) throw new Error("HTTP " + res.status + " " + res.statusText + "\n" + url);
+      const text = await res.text();
+      if (!text) throw new Error("接口返回空内容\n" + url);
+      return text;
+    } catch (error) {
+      if (error && error.name === "AbortError") throw new Error("请求超时（10 秒）\n" + url);
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
   });
 }
 
