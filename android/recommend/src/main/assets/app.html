@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>特码推荐</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <svg class="branch" viewBox="0 0 480 230" aria-hidden="true">
+    <path d="M30 200C90 160 130 120 190 98c48-18 86-18 130-8 38 8 78 4 120-28" fill="none" stroke="#E7A0B4" stroke-width="3" stroke-linecap="round"/>
+    <g fill="#FFB7C9">
+      <circle cx="118" cy="132" r="8"/><circle cx="132" cy="118" r="7"/><circle cx="108" cy="116" r="6"/>
+      <circle cx="196" cy="96" r="9"/><circle cx="214" cy="84" r="7"/><circle cx="184" cy="82" r="6"/>
+      <circle cx="292" cy="86" r="8"/><circle cx="308" cy="74" r="6"/><circle cx="278" cy="74" r="6"/>
+      <circle cx="392" cy="58" r="9"/><circle cx="410" cy="46" r="7"/><circle cx="378" cy="44" r="6"/>
+    </g>
+  </svg>
+  <canvas id="petals" aria-hidden="true"></canvas>
+  <main id="app">
+    <section class="panel"><h2>正在计算</h2><p class="fine" id="status">1.7 正在读取最新开奖…</p></section>
+  </main>
+  <script src="engine.js"></script>
+  <script>
+    const canvas = document.getElementById("petals");
+    const ctx = canvas.getContext("2d");
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!reduce && ctx) {
+      const petals = Array.from({ length: 16 }, () => ({
+        x: Math.random(), y: Math.random(), r: 5 + Math.random() * 6,
+        v: 0.35 + Math.random() * 0.5, a: Math.random() * 6, spin: (Math.random() - 0.5) * 0.02,
+      }));
+      let resizing = false;
+      function resize() {
+        if (resizing) return;
+        resizing = true;
+        const dpr = devicePixelRatio || 1;
+        const ratio = dpr > 2 ? 2 : dpr;
+        canvas.width = Math.floor(innerWidth * ratio);
+        canvas.height = Math.floor(innerHeight * ratio);
+        canvas.style.width = innerWidth + "px";
+        canvas.style.height = innerHeight + "px";
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        resizing = false;
+      }
+      let painting = false;
+      function frame() {
+        if (painting) return;
+        painting = true;
+        ctx.clearRect(0, 0, innerWidth, innerHeight);
+        for (let i = 0; i < petals.length; i += 1) {
+          const p = petals[i];
+          p.y += p.v / innerHeight;
+          p.x += Math.sin(p.y * 12) * 0.0015;
+          p.a += p.spin;
+          if (p.y > 1.05) { p.y = -0.05; p.x = Math.random(); }
+          ctx.save();
+          ctx.translate(p.x * innerWidth, p.y * innerHeight);
+          ctx.rotate(p.a);
+          ctx.globalAlpha = 0.45;
+          ctx.fillStyle = "#FF9BB3";
+          ctx.beginPath();
+          ctx.moveTo(0, -p.r * 0.2);
+          ctx.bezierCurveTo(p.r, -p.r, p.r * 0.7, p.r, 0, p.r * 1.4);
+          ctx.bezierCurveTo(-p.r * 0.7, p.r, -p.r, -p.r, 0, -p.r * 0.2);
+          ctx.fill();
+          ctx.restore();
+        }
+        painting = false;
+      }
+      resize();
+      addEventListener("resize", resize);
+      setInterval(frame, 32);
+    }
+  </script>
+</body>
+</html>

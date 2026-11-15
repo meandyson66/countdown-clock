@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.SakuraCountdown" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">#ffd6e0</item>
+        <item name="android:navigationBarColor">#fff6ea</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:windowBackground">#fff6ea</item>
+    </style>
+</resources>

@@ -1,0 +1,38 @@
+---
+description: 特码推荐安卓 WebView 已踩过的栈溢出、卡死和打包坑。改 android/recommend 或用户说读取失败、Maximum call stack、正在计算时直接按这里修，不要从零重查。
+globs: android/recommend/**/*
+alwaysApply: false
+---
+
+# 特码推荐安卓端（com.meandyson.macaurecommend）
+
+独立于樱花倒计时（com.meandyson.sakuracountdown）。页面脚本是普通脚本，不是 module。计算在 `assets/engine.js`，原生请求在 `MainActivity` 的 `AndroidBridge`。账本只用 localStorage（`macau-ledger-v1` / `macau-stake-v1` / `macau-cache-v1`），与电脑上的 `records.csv` 无关。未要求时不要改单注，不要点「重置本期」。
+
+## 已确认的栈溢出：不要再查排序或网络
+
+堆栈如果是同一行反复出现 `window.refreshNow`，原因只有一个：全局 `function refreshNow` 就是 `window.refreshNow`。再写 `window.refreshNow = () => refreshNow(false)` 会把原函数盖掉，箭头里的 `refreshNow` 变成自己，打开即爆栈。
+
+```javascript
+// 错误：箭头调用的就是刚被盖掉的自己
+async function refreshNow(replace) { /* ... */ }
+window.refreshNow = () => refreshNow(false);
+
+// 正确：内部名字和 window 上的入口必须不同
+async function runRefresh(replace) { /* ... */ }
+window.refreshNow = () => runRefresh(false);
+```
+
+页面内、按钮、轮询、`boot` 都调用 `runRefresh`。只有 Java 的 `evaluateJavascript("window.refreshNow()")` 走入口。入口里不要再写同名函数。
+
+## 其他会卡死或爆栈的写法
+
+- 不要把约 160KB 的开奖 JSON 塞进 `evaluateJavascript`，回调不会来。Java 下载后用 `readChunk` 每次最多 2 万字，由页面脚本在普通调用里取走。
+- 不要在 `evaluateJavascript` 的回调里调用 `@JavascriptInterface`。WebView 会卡死，`setTimeout` 也不走。`beginFetch` 在接口里用 `Future.get` 限时，失败返回 `ERR\n状态码\n原因`。
+- 不要在 `file://` 里用 `fetch`，也不要靠 `shouldInterceptRequest` 转发。只允许 `https://history.macaumarksix.com/`。
+- 不要对几百期记录使用 `Array.sort`、`[...大数组]`、`Math.max(...arr)`、`push(...大数组)`。WebView 的排序是递归的，比较器相等时不返回 0 也会爆栈。用现成的循环版 `safeSort` 和 for 循环。
+- `onerror` 里不要同步 `alert`。用 `errorLatched` 挡住重入，弹窗放到 `setTimeout`。读取、对账、计算、保存、渲染只走一轮，靠 `isCalculating` 挡住 `onResume` 和 `boot` 的第二次进入。渲染不要反过来调用刷新。
+- 花瓣不要在 `frame` 里再调用 `requestAnimationFrame(frame)`。用 `setInterval`，并用 `painting` / `resizing` 挡住重入。
+
+## 打包
+
+每次安装包复制到桌面，文件名带版本和时间：`特码推荐-<版本>-yyyyMMdd-HHmmss.apk`，不要覆盖旧包。加载行写出版本号，并加大 `app.html?v=`。`aapt` 不能读中文路径，用英文构建产物核对包名和 versionName。资源脚本不要加 query。构建用本机 sakura-build 的 JDK 17 与 Gradle 8.11.1，在 `android/` 执行 `:recommend:assembleRelease --offline`。不要动 8765 端口上的倒计时静态服务。
