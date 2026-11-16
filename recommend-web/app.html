@@ -32,10 +32,16 @@
     </header>
     <div class="history-body">
       <div class="history-subtabs" id="historySubtabs">
-        <button type="button" class="history-subtab on" data-stats-kind="new">新澳门 21:32</button>
-        <button type="button" class="history-subtab" data-stats-kind="old">老澳门 22:32</button>
-        <button type="button" class="history-subtab" data-stats-kind="hk">香港 21:30</button>
+        <button type="button" class="history-subtab lottery-tab on" data-stats-kind="new">新澳门</button>
+        <button type="button" class="history-subtab lottery-tab" data-stats-kind="old">老澳门</button>
+        <button type="button" class="history-subtab lottery-tab" data-stats-kind="hk">香港</button>
       </div>
+      <label class="history-search" for="historySearchInput">
+        <span class="history-search-icon" aria-hidden="true">🔍</span>
+        <input type="search" id="historySearchInput" placeholder="输入期号（如 2026320）或号码（如 17）快速检索…" autocomplete="off">
+      </label>
+      <div class="history-official" id="historyListContainer"></div>
+      <p class="history-section-label">号码深度分析</p>
       <div class="history-metrics" id="historyMetrics"></div>
       <div class="history-card">
         <p class="history-card-title">快速切换分析号码</p>
@@ -47,7 +53,7 @@
       </div>
     </div>
   </div>
-  <script src="engine.js?v=history-1"></script>
+  <script src="engine.js?v=history-2"></script>
   <script>
     const canvas = document.getElementById("petals");
     const ctx = canvas.getContext("2d");

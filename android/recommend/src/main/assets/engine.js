@@ -49,7 +49,7 @@ let isRendering = false;
 let payloads = [];
 let rows = [];
 let historyCache = { new: [], old: [], hk: [] };
-let statsModal = { kind: "new", number: 17 };
+let statsModal = { kind: "new", number: 17, search: "" };
 let historyShellBound = false;
 let pollTimer = 0;
 const pendingHttp = {};
@@ -926,6 +926,53 @@ function analyzeNumber(history, num) {
     timeline: timeline.slice(0, 20),
   };
 }
+function historyMatchesSearch(draw, keyword) {
+  const key = String(keyword || "").trim();
+  if (!key) return true;
+  if (/^\d{1,2}$/.test(key)) {
+    const n = Number(key);
+    return draw.nums.includes(n);
+  }
+  return String(draw.expect || "").includes(key) || String(draw.date || "").includes(key);
+}
+function drawTimeLabel(kind, draw) {
+  const clock = SOURCES[kind] && SOURCES[kind].clock;
+  return clock ? `${draw.date} ${clock}` : draw.date;
+}
+function officialDrawCardHtml(draw, kind) {
+  const index = yearIndex(draw);
+  const balls = draw.nums.map((n, pos) => {
+    const zodiac = draw.zodiacs[pos] || zodiacOf(index, n);
+    const wave = tone(colorName(n));
+    const special = pos === draw.nums.length - 1 ? " special" : "";
+    return `<button type="button" class="hist-ball ${wave}${special}" data-number="${pad2(n)}" data-kind="${kind}"><b>${pad2(n)}</b><small>${escapeHtml(zodiac)}·${escapeHtml(colorName(n))}</small></button>`;
+  }).join("");
+  return `<article class="history-draw-card"><header><strong>${escapeHtml(draw.expect)}期</strong><time>${escapeHtml(drawTimeLabel(kind, draw))}</time></header><div class="history-draw-balls">${balls}</div></article>`;
+}
+function renderOfficialHistoryList() {
+  const root = document.getElementById("historyListContainer");
+  if (!root) return;
+  const kind = statsModal.kind;
+  const history = historyCache[kind] || [];
+  const keyword = statsModal.search;
+  const filtered = history.filter((draw) => historyMatchesSearch(draw, keyword)).slice(0, 60);
+  if (!history.length) {
+    root.innerHTML = `<p class="fine">正在等待开奖数据…请稍后重新打开历史统计。</p>`;
+    return;
+  }
+  if (!filtered.length) {
+    root.innerHTML = `<p class="fine">没有匹配「${escapeHtml(keyword)}」的期号或号码。</p>`;
+    return;
+  }
+  root.innerHTML = filtered.map((draw) => officialDrawCardHtml(draw, kind)).join("");
+  root.querySelectorAll(".hist-ball").forEach((ball) => {
+    ball.addEventListener("click", () => {
+      statsModal.number = Number(ball.dataset.number);
+      statsModal.kind = ball.dataset.kind || kind;
+      renderHistoryModal();
+    });
+  });
+}
 function renderHistoryModal() {
   const modal = document.getElementById("historyModal");
   if (!modal || modal.hidden) return;
@@ -933,6 +980,9 @@ function renderHistoryModal() {
   const history = historyCache[kind] || [];
   const num = Number(statsModal.number);
   const name = (SOURCES[kind] && SOURCES[kind].name) || kind;
+  const searchInput = document.getElementById("historySearchInput");
+  if (searchInput && searchInput.value !== statsModal.search) searchInput.value = statsModal.search;
+  renderOfficialHistoryList();
   const stats = analyzeNumber(history, num);
   const badge = document.getElementById("modalNumberBadge");
   const title = document.getElementById("modalTitle");
@@ -1019,6 +1069,12 @@ function bindHistoryShell() {
       renderHistoryModal();
     });
   }
+  const searchInput = document.getElementById("historySearchInput");
+  if (searchInput) {
+    searchInput.addEventListener("input", (event) => {
+      handleHistorySearch(event.target.value);
+    });
+  }
 }
 window.openHistoryModal = openHistoryModal;
 window.closeHistoryModal = closeHistoryModal;
@@ -1031,6 +1087,15 @@ window.switchLottery = (key) => {
   const map = { new_macau: "new", old_macau: "old", hk: "hk" };
   statsModal.kind = map[key] || key;
   renderHistoryModal();
+};
+window.filterLottery = (type) => {
+  if (!SOURCES[type]) return;
+  statsModal.kind = type;
+  renderHistoryModal();
+};
+window.handleHistorySearch = (keyword) => {
+  statsModal.search = String(keyword || "").trim();
+  renderOfficialHistoryList();
 };
 window.selectNum = (num) => {
   statsModal.number = Number(num);
