@@ -48,6 +48,9 @@ let isCalculating = false;
 let isRendering = false;
 let payloads = [];
 let rows = [];
+let historyCache = { new: [], old: [], hk: [] };
+let statsModal = { kind: "new", number: 17 };
+let historyShellBound = false;
 let pollTimer = 0;
 const pendingHttp = {};
 let httpSeq = 0;
@@ -683,9 +686,9 @@ function pct(hits, windowSize) {
 }
 function ballsHtml(payload) {
   return payload.numbers.map((item, index) => (
-    `<span class="ball ${tone(item.color)}" style="animation-delay:${((index + 1) * 0.06).toFixed(2)}s">`
+    `<button type="button" class="ball number-ball ${tone(item.color)}" data-number="${escapeHtml(item.number)}" data-kind="${escapeHtml(payload.type)}" style="animation-delay:${((index + 1) * 0.06).toFixed(2)}s">`
     + `<b class="num"><span>${escapeHtml(item.number)}</span></b>`
-    + `<small>${escapeHtml(item.zodiac)} · ${escapeHtml(item.color)}</small></span>`
+    + `<small>${escapeHtml(item.zodiac)} · ${escapeHtml(item.color)}</small></button>`
   )).join("");
 }
 function minisHtml(numbers) {
@@ -798,7 +801,7 @@ function consoleHtml() {
   }).join("") || `<div class="preview-item" data-count="0" data-odds="0"><div><span>投入总额</span><strong class="num spent">—</strong></div></div>`;
   return `<section class="panel console">
     <div class="toolbar">
-      <nav class="tabs tabs-4">${tabs}</nav>
+      <nav class="tabs tabs-5">${tabs}<button type="button" class="tab-stats" id="open-history">历史统计</button></nav>
       <div class="actions">
         <button type="button" class="ghost" id="refresh">重新计算</button>
         <button type="button" class="ghost" id="reset">重置本期</button>
@@ -875,6 +878,165 @@ function render(force) {
     isRendering = false;
   }
 }
+function defaultStatsKind() {
+  if (view === "new" || view === "old" || view === "hk") return view;
+  return "new";
+}
+function analyzeNumber(history, num) {
+  const n = Number(num);
+  const totalDraws = history.length;
+  let specialCount = 0;
+  const gapBetween = [];
+  let lastSpecialAt = -1;
+  const timeline = [];
+  for (let i = 0; i < history.length; i += 1) {
+    const draw = history[i];
+    const isSpecial = draw.special === n;
+    const inMain = draw.nums.slice(0, -1).includes(n);
+    if (isSpecial) {
+      specialCount += 1;
+      if (lastSpecialAt >= 0) gapBetween.push(i - lastSpecialAt);
+      lastSpecialAt = i;
+    }
+    if (isSpecial || inMain) {
+      timeline.push({
+        expect: draw.expect,
+        date: draw.date,
+        isSpecial,
+        label: isSpecial ? "特码开出 命中" : "平码开出",
+      });
+    }
+  }
+  const currentOmit = lastSpecialAt >= 0 ? lastSpecialAt : totalDraws;
+  let maxOmit = currentOmit;
+  gapBetween.forEach((gap) => { if (gap > maxOmit) maxOmit = gap; });
+  const avgGap = gapBetween.length
+    ? (gapBetween.reduce((sum, gap) => sum + gap, 0) / gapBetween.length).toFixed(1)
+    : "—";
+  const pct = totalDraws ? (specialCount / totalDraws * 100).toFixed(1) : "0.0";
+  const omitLabel = currentOmit >= 15 ? "偏冷" : "安全";
+  return {
+    totalDraws,
+    specialCount,
+    pct,
+    currentOmit,
+    maxOmit,
+    avgGap,
+    omitLabel,
+    timeline: timeline.slice(0, 20),
+  };
+}
+function renderHistoryModal() {
+  const modal = document.getElementById("historyModal");
+  if (!modal || modal.hidden) return;
+  const kind = statsModal.kind;
+  const history = historyCache[kind] || [];
+  const num = Number(statsModal.number);
+  const name = (SOURCES[kind] && SOURCES[kind].name) || kind;
+  const stats = analyzeNumber(history, num);
+  const badge = document.getElementById("modalNumberBadge");
+  const title = document.getElementById("modalTitle");
+  if (badge) badge.textContent = pad2(num);
+  if (title) title.textContent = `号码 ${pad2(num)} · ${name} · 历史数据看板`;
+  document.querySelectorAll(".history-subtab").forEach((el) => {
+    el.classList.toggle("on", el.dataset.statsKind === kind);
+  });
+  const metrics = document.getElementById("historyMetrics");
+  if (metrics) {
+    metrics.innerHTML = `
+      <div class="history-metric"><k>特码历史开出</k><b>${stats.specialCount} 次 <em>(占比 ${stats.pct}%)</em></b></div>
+      <div class="history-metric"><k>当前遗漏期数</k><b class="warn">${stats.currentOmit} 期 <em>(${stats.omitLabel})</em></b></div>
+      <div class="history-metric"><k>历史最大遗漏</k><b class="neutral">${stats.maxOmit} 期</b></div>
+      <div class="history-metric"><k>平均出号间隔</k><b class="neutral">${stats.avgGap} 期</b></div>`;
+  }
+  const grid = document.getElementById("miniNumberGrid");
+  if (grid) {
+    let html = "";
+    for (let pick = 1; pick <= 49; pick += 1) {
+      const wave = tone(colorName(pick));
+      const on = pick === num ? " on" : "";
+      html += `<button type="button" class="${wave}${on}" data-pick="${pick}">${pad2(pick)}</button>`;
+    }
+    grid.innerHTML = html;
+  }
+  const lines = document.getElementById("historyTimeline");
+  if (lines) {
+    if (!stats.timeline.length) {
+      lines.innerHTML = `<p class="fine">暂无该号码在本彩种已加载记录中的出现数据。</p>`;
+    } else {
+      lines.innerHTML = stats.timeline.map((row, index) => (
+        `<div class="line${index % 2 ? " alt" : ""}"><span>${escapeHtml(row.expect)}期 · ${escapeHtml(row.date || "")}</span>`
+        + `<span class="${row.isSpecial ? "hit" : "plain"}">${escapeHtml(row.label)}</span></div>`
+      )).join("");
+    }
+  }
+}
+function openHistoryModal(number, kind) {
+  if (Number.isFinite(Number(number))) statsModal.number = Number(number);
+  statsModal.kind = kind && SOURCES[kind] ? kind : defaultStatsKind();
+  const modal = document.getElementById("historyModal");
+  const backdrop = document.getElementById("historyBackdrop");
+  if (!modal || !backdrop) return;
+  modal.hidden = false;
+  backdrop.hidden = false;
+  modal.setAttribute("aria-hidden", "false");
+  renderHistoryModal();
+}
+function closeHistoryModal() {
+  const modal = document.getElementById("historyModal");
+  const backdrop = document.getElementById("historyBackdrop");
+  if (modal) {
+    modal.hidden = true;
+    modal.setAttribute("aria-hidden", "true");
+  }
+  if (backdrop) backdrop.hidden = true;
+}
+function bindHistoryShell() {
+  if (historyShellBound) return;
+  historyShellBound = true;
+  const backdrop = document.getElementById("historyBackdrop");
+  const closeBtn = document.getElementById("close-history");
+  if (backdrop) backdrop.addEventListener("click", closeHistoryModal);
+  if (closeBtn) closeBtn.addEventListener("click", closeHistoryModal);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeHistoryModal();
+  });
+  const subtabs = document.getElementById("historySubtabs");
+  if (subtabs) {
+    subtabs.addEventListener("click", (event) => {
+      const btn = event.target.closest("[data-stats-kind]");
+      if (!btn) return;
+      statsModal.kind = btn.dataset.statsKind;
+      renderHistoryModal();
+    });
+  }
+  const grid = document.getElementById("miniNumberGrid");
+  if (grid) {
+    grid.addEventListener("click", (event) => {
+      const btn = event.target.closest("button[data-pick]");
+      if (!btn) return;
+      statsModal.number = Number(btn.dataset.pick);
+      renderHistoryModal();
+    });
+  }
+}
+window.openHistoryModal = openHistoryModal;
+window.closeHistoryModal = closeHistoryModal;
+window.showNumberDetail = (num, lotteryType) => {
+  const map = { "新澳门": "new", "老澳门": "old", "香港": "hk", new_macau: "new", old_macau: "old" };
+  const kind = map[lotteryType] || lotteryType;
+  openHistoryModal(num, VALID_VIEWS.has(kind) && kind !== "all" ? kind : defaultStatsKind());
+};
+window.switchLottery = (key) => {
+  const map = { new_macau: "new", old_macau: "old", hk: "hk" };
+  statsModal.kind = map[key] || key;
+  renderHistoryModal();
+};
+window.selectNum = (num) => {
+  statsModal.number = Number(num);
+  renderHistoryModal();
+};
+
 function bind() {
   document.querySelectorAll("[data-view]").forEach((link) => {
     link.addEventListener("click", (event) => {
@@ -892,6 +1054,11 @@ function bind() {
   const form = document.querySelector("#stake-form");
   const info = document.querySelector(".info");
   const stake = document.querySelector("#stake");
+  const openHistory = document.querySelector("#open-history");
+  if (openHistory) openHistory.addEventListener("click", () => openHistoryModal());
+  document.querySelectorAll(".number-ball").forEach((ball) => {
+    ball.addEventListener("click", () => openHistoryModal(ball.dataset.number, ball.dataset.kind));
+  });
   if (refresh) refresh.addEventListener("click", () => runRefresh(false));
   if (reset) reset.addEventListener("click", () => {
     if (window.confirm("只替换尚未开奖的本期号码。已经开奖的对账记录会保留。")) runRefresh(true);
@@ -932,6 +1099,7 @@ async function runRefresh(replace) {
     for (let i = 0; i < KINDS.length; i += 1) {
       const kind = KINDS[i];
       histories[kind] = await loadDraws(kind);
+      historyCache[kind] = histories[kind];
     }
     setSync("开奖已取到，正在计算…");
     await paint();
@@ -948,6 +1116,7 @@ async function runRefresh(replace) {
     payloads = nextPayloads;
     localStorage.setItem(CACHE_KEY, JSON.stringify({ payloads: nextPayloads, rows: next }));
     render(false);
+    if (document.getElementById("historyModal") && !document.getElementById("historyModal").hidden) renderHistoryModal();
     setSync("实时更新 · " + new Date().toLocaleTimeString("zh-CN", { hour12: false }));
   } catch (error) {
     const message = error && error.stack ? error.stack : (error && error.message ? error.message : "网络异常");
@@ -988,6 +1157,7 @@ function showFailure(message) {
 }
 
 function boot() {
+  bindHistoryShell();
   view = viewFromHash();
   addEventListener("hashchange", () => {
     const next = viewFromHash();

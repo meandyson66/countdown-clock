@@ -18,9 +18,36 @@
   </svg>
   <canvas id="petals" aria-hidden="true"></canvas>
   <main id="app">
-    <section class="panel"><h2>正在计算</h2><p class="fine" id="status">1.7 正在读取最新开奖…</p></section>
+    <section class="panel"><h2>正在计算</h2><p class="fine" id="status">1.8 正在读取最新开奖…</p></section>
   </main>
-  <script src="engine.js?v=hk-1"></script>
+  <div id="historyBackdrop" class="history-backdrop" hidden></div>
+  <div id="historyModal" class="history-sheet" hidden aria-hidden="true" role="dialog" aria-labelledby="modalTitle">
+    <div class="history-handle" aria-hidden="true"></div>
+    <header class="history-head">
+      <div class="history-head-main">
+        <span id="modalNumberBadge" class="history-badge num">17</span>
+        <h3 id="modalTitle" class="history-title">号码 17 · 历史数据看板</h3>
+      </div>
+      <button type="button" class="history-close" id="close-history" aria-label="关闭">✕</button>
+    </header>
+    <div class="history-body">
+      <div class="history-subtabs" id="historySubtabs">
+        <button type="button" class="history-subtab on" data-stats-kind="new">新澳门 21:32</button>
+        <button type="button" class="history-subtab" data-stats-kind="old">老澳门 22:32</button>
+        <button type="button" class="history-subtab" data-stats-kind="hk">香港 21:30</button>
+      </div>
+      <div class="history-metrics" id="historyMetrics"></div>
+      <div class="history-card">
+        <p class="history-card-title">快速切换分析号码</p>
+        <div class="history-mini-grid" id="miniNumberGrid"></div>
+      </div>
+      <div class="history-card">
+        <p class="history-card-title">最近开出记录</p>
+        <div class="history-timeline" id="historyTimeline"></div>
+      </div>
+    </div>
+  </div>
+  <script src="engine.js?v=history-1"></script>
   <script>
     const canvas = document.getElementById("petals");
     const ctx = canvas.getContext("2d");
