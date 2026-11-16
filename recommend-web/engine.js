@@ -800,14 +800,14 @@ function consoleHtml() {
     return `<div class="preview-item" data-count="${item.numbers.length}" data-odds="${item.payoutOdds}">${title}<div><span>投入总额</span><strong class="num spent">—</strong></div><div><span>预计纯利</span><strong class="num profit">—</strong></div></div>`;
   }).join("") || `<div class="preview-item" data-count="0" data-odds="0"><div><span>投入总额</span><strong class="num spent">—</strong></div></div>`;
   return `<section class="panel console">
-    <div class="toolbar">
-      <nav class="tabs tabs-5">${tabs}<button type="button" class="tab-stats" id="open-history">历史统计</button></nav>
+    <div class="toolbar action-bar header-actions">
+      <nav class="tabs tabs-5 stats-row">${tabs}<button type="button" class="tab-stats" id="open-history">历史统计</button></nav>
       <div class="actions">
         <button type="button" class="ghost" id="refresh">重新计算</button>
         <button type="button" class="ghost" id="reset">重置本期</button>
       </div>
     </div>
-    <form class="fund" id="stake-form">
+    <form class="fund stats-container" id="stake-form">
       <label class="field" for="stake"><span>单注</span><input id="stake" class="num" type="number" min="0.01" step="0.01" inputmode="decimal" value="${escapeHtml(value)}" required><button type="submit">保存</button></label>
       <button type="button" class="info" aria-label="金额说明">i<span class="tip">${escapeHtml(tip)}</span></button>
       <div class="previews">${previews}</div>
