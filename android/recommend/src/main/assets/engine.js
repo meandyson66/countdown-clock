@@ -18,10 +18,23 @@ const SETTINGS = {
 };
 SETTINGS.recommendCount = SETTINGS.recommendMax;
 
+const KINDS = ["new", "old", "hk"];
+const VALID_VIEWS = new Set(["all", ...KINDS]);
 const SOURCES = {
-  new: { code: "macaujc2", name: "新澳门 21:32", clock: "21:32" },
-  old: { code: "macaujc", name: "老澳门 22:32", clock: "22:32" },
+  new: { code: "macaujc2", name: "新澳门 21:32", clock: "21:32", payoutOdds: SETTINGS.payoutOdds },
+  old: { code: "macaujc", name: "老澳门 22:32", clock: "22:32", payoutOdds: SETTINGS.payoutOdds },
+  hk: {
+    code: "hkjc",
+    name: "香港 21:30",
+    clock: "21:30",
+    payoutOdds: 47.5,
+    drawDays: [0, 2, 4, 6],
+    scheduleNote: "开奖日：周二、周四、周六、日 21:30（香港时间）",
+    // 备用接入：HK_API.historyUrl(year, page) 或改为其他 code
+  },
 };
+/** @type {{ historyUrl?: (year: number, page: number) => string }} */
+const HK_API = {};
 const ZODIACS = ["鼠", "牛", "虎", "兔", "龙", "蛇", "马", "羊", "猴", "鸡", "狗", "猪"];
 const TRAD = { "雞": "鸡", "龍": "龙", "馬": "马", "豬": "猪" };
 const RED = new Set([1, 2, 7, 8, 12, 13, 18, 19, 23, 24, 29, 30, 34, 35, 40, 45, 46]);
@@ -215,12 +228,17 @@ function normalize(raw) {
 }
 
 async function loadDraws(kind) {
+  if (kind === "hk" && typeof HK_API.historyUrl === "function") {
+    return loadHongKongDrawsCustom();
+  }
+  const meta = SOURCES[kind];
+  if (!meta || !meta.code) throw new Error("未知彩种：" + kind);
   const year = new Date().getFullYear();
   const merged = new Map();
   const errors = [];
   for (let target = year - 1; target <= year; target += 1) {
-    const url = `https://history.macaumarksix.com/history/${SOURCES[kind].code}/y/${target}`;
-    setSync("1.7 正在读取" + SOURCES[kind].name + " " + target);
+    const url = `https://history.macaumarksix.com/history/${meta.code}/y/${target}`;
+    setSync("1.7 正在读取" + meta.name + " " + target);
     try {
       const text = await httpGet(url);
       let body = null;
@@ -252,6 +270,86 @@ async function loadDraws(kind) {
   });
   if (!history.length) throw new Error(errors.join("\n") || "没有拿到开奖数据");
   return history;
+}
+
+async function loadHongKongDrawsCustom() {
+  const year = new Date().getFullYear();
+  const merged = new Map();
+  const errors = [];
+  for (let target = year - 1; target <= year; target += 1) {
+    for (let page = 1; page <= 20; page += 1) {
+      const url = HK_API.historyUrl(target, page);
+      setSync("1.7 正在读取香港 21:30 " + target + " 第" + page + "页");
+      try {
+        const text = await httpGet(url);
+        const body = JSON.parse(text);
+        const data = body.data || body.results || body;
+        if (!Array.isArray(data) || !data.length) break;
+        data.forEach((raw) => {
+          const draw = normalizeHongKong(raw);
+          if (draw && draw.expect) merged.set(draw.expect, draw);
+        });
+        if (data.length < 50) break;
+      } catch (error) {
+        errors.push(error && error.message ? error.message : String(error));
+        break;
+      }
+    }
+  }
+  const historyList = [];
+  merged.forEach(function (draw) { historyList.push(draw); });
+  const history = safeSort(historyList, (a, b) => {
+    if (a.date < b.date) return 1;
+    if (a.date > b.date) return -1;
+    return (b.expectNum || 0) - (a.expectNum || 0);
+  });
+  if (!history.length) throw new Error(errors.join("\n") || "没有拿到香港开奖数据");
+  return history;
+}
+
+function normalizeHongKong(raw) {
+  if (raw && raw.openCode) return normalize(raw);
+  if (raw && raw.special_number != null) {
+    const nums = [
+      raw.num1, raw.num2, raw.num3, raw.num4, raw.num5, raw.num6, raw.special_number,
+    ].map(Number).filter((n) => n >= 1 && n <= 49);
+    if (nums.length < 7) return null;
+    const date = String(raw.draw_date || "").slice(0, 10);
+    const expect = String(raw.draw_number || raw.expect || "").replace(/\//g, "");
+    const expectNum = /^\d+$/.test(expect) ? Number(expect) : Number(String(expect).replace(/\D/g, "")) || 0;
+    const index = 0;
+    const zodiacs = nums.map((n) => zodiacOf(index, n));
+    return {
+      expect,
+      expectNum,
+      date,
+      nums,
+      zodiacs,
+      special: nums[6],
+      specialZodiac: zodiacs[6],
+    };
+  }
+  return null;
+}
+
+function nextDrawAt(kind, now) {
+  const meta = SOURCES[kind];
+  if (!meta) return now;
+  if (meta.drawDays && meta.drawDays.length) {
+    for (let i = 0; i < 21; i += 1) {
+      const day = new Date(now);
+      day.setDate(day.getDate() + i);
+      if (!meta.drawDays.includes(day.getDay())) continue;
+      const parts = meta.clock.split(":");
+      day.setHours(Number(parts[0]), Number(parts[1]), 0, 0);
+      if (day > now) return day;
+    }
+  }
+  const parts = meta.clock.split(":");
+  const target = new Date(now);
+  target.setHours(Number(parts[0]), Number(parts[1]), 0, 0);
+  if (target <= now) target.setDate(target.getDate() + 1);
+  return target;
 }
 
 function omissionMap(history) {
@@ -432,7 +530,7 @@ function officialDraw(row, history) {
   return null;
 }
 function recomputeTotals(next) {
-  ["new", "old"].forEach((kind) => {
+  KINDS.forEach((kind) => {
     let total = 0;
     safeSort(next.filter((row) => row["类型"] === kind && (row["是否命中"] === "命中" || row["是否命中"] === "未中")), (a, b) => Number(a["开奖期号"] || a["期号"] || 0) - Number(b["开奖期号"] || b["期号"] || 0))
       .forEach((row) => {
@@ -506,7 +604,8 @@ function recommend(history, kind, next, replace) {
     stake = manual && picks.length ? manual : Math.round((SETTINGS.budget / Math.max(picks.length, 1)) * 100) / 100;
     spent = picks.length ? Math.round(stake * picks.length * 100) / 100 : 0;
   }
-  const net = picks.length ? Math.round((stake * SETTINGS.payoutOdds - spent) * 100) / 100 : 0;
+  const payoutOdds = SOURCES[kind].payoutOdds ?? SETTINGS.payoutOdds;
+  const net = picks.length ? Math.round((stake * payoutOdds - spent) * 100) / 100 : 0;
   const result = {
     type: kind,
     name: SOURCES[kind].name,
@@ -515,7 +614,7 @@ function recommend(history, kind, next, replace) {
     numbers: picks,
     stake,
     spent,
-    payoutOdds: SETTINGS.payoutOdds,
+    payoutOdds,
     netProfitIfHit: net,
     backtestWindow: short.evaluated,
     backtestHits: short.hits,
@@ -599,8 +698,9 @@ function stageHtml(payload) {
   const funnel = payload.funnel || {};
   const zodiacs = (funnel.zodiacs || []).join(" ") || "—";
   const badge = payload.locked
-    ? `<span class="badge live"><i></i>本期已锁定</span>`
-    : `<span class="badge idle">本期推荐</span>`;
+  ? `<span class="badge live"><i></i>本期已锁定</span>`
+  : (payload.scheduleNote ? `<span class="badge idle">待开奖</span>` : `<span class="badge idle">本期推荐</span>`);
+  const schedule = payload.scheduleNote ? `<p class="fine">${escapeHtml(payload.scheduleNote)}</p>` : "";
   const streakClass = Number(payload.missStreak || 0) >= 5 ? "down" : "";
   const cold = funnel.coldDropped == null ? "" : `<p class="fine">遗漏超过 ${funnel.omissionMax} 期的冷号已剔除 ${funnel.coldDropped} 个</p>`;
   const warning = payload.riskWarning ? `<p class="banner">${escapeHtml(payload.riskWarning)}</p>` : "";
@@ -609,7 +709,7 @@ function stageHtml(payload) {
       <div class="cal-top"><p class="kicker">${escapeHtml(payload.name)}</p>${badge}</div>
       <div class="cal-face">
         <div><span class="cal-label">下期</span><h2 class="num">${escapeHtml(payload.issue)}</h2></div>
-        <span class="count" data-draw="${SOURCES[payload.type].clock}"><span class="cal-label">距开奖</span><b class="tick num">--:--:--</b></span>
+        <span class="count" data-draw="${SOURCES[payload.type].clock}" data-source-kind="${escapeHtml(payload.type)}"><span class="cal-label">距开奖</span><b class="tick num">--:--:--</b></span>
       </div>
     </header>
     <div class="balls">${ballsHtml(payload)}</div>
@@ -619,12 +719,12 @@ function stageHtml(payload) {
       <article><span>当前连错</span><strong class="num ${streakClass}">${escapeHtml(payload.missStreak)}</strong><em>期</em></article>
       <article><span>当旺生肖</span><strong class="zodiac">${escapeHtml(zodiacs)}</strong><em>前四名</em></article>
     </div>
-    ${cold}${warning}
+    ${cold}${warning}${schedule}
     <p class="fine">更新于 ${escapeHtml(payload.updatedAt)}</p>
   </section>`;
 }
 function ledgerKinds() {
-  if (view === "all") return ["new", "old"];
+  if (view === "all") return KINDS;
   return [view];
 }
 function ledgerRows() {
@@ -633,7 +733,7 @@ function ledgerRows() {
 }
 function viewFromHash() {
   const key = (location.hash || "#all").replace(/^#/, "");
-  return key === "new" || key === "old" || key === "all" ? key : "all";
+  return VALID_VIEWS.has(key) ? key : "all";
 }
 function syncHash(next) {
   const target = `#${next}`;
@@ -686,7 +786,7 @@ function consoleHtml() {
   const stake = readStake();
   const value = stake ? stake.toFixed(2) : "";
   const tip = stake ? "投入 = 单注 × 号码个数，命中纯利 = 单注 × 赔率 − 投入。当前已按填写的单注计算。" : "投入 = 单注 × 号码个数，命中纯利 = 单注 × 赔率 − 投入。未保存前按总预算平分。";
-  const tabs = [["all", "两期一起"], ["new", "新澳门"], ["old", "老澳门"]].map(([key, label]) => (
+  const tabs = [["all", "三期一起"], ["new", "新澳门"], ["old", "老澳门"], ["hk", "香港"]].map(([key, label]) => (
     `<a class="${key === view ? "on" : ""}" href="#${key}" data-view="${key}">${label}</a>`
   )).join("");
   const list = shownPayloads();
@@ -698,7 +798,7 @@ function consoleHtml() {
   }).join("") || `<div class="preview-item" data-count="0" data-odds="0"><div><span>投入总额</span><strong class="num spent">—</strong></div></div>`;
   return `<section class="panel console">
     <div class="toolbar">
-      <nav class="tabs">${tabs}</nav>
+      <nav class="tabs tabs-4">${tabs}</nav>
       <div class="actions">
         <button type="button" class="ghost" id="refresh">重新计算</button>
         <button type="button" class="ghost" id="reset">重置本期</button>
@@ -736,9 +836,8 @@ function paintStake() {
 function tick() {
   const now = new Date();
   document.querySelectorAll("[data-draw]").forEach((el) => {
-    const parts = el.dataset.draw.split(":");
-    const target = new Date(now);
-    target.setHours(Number(parts[0]), Number(parts[1]), 0, 0);
+    const kind = el.dataset.sourceKind || "new";
+    const target = nextDrawAt(kind, now);
     const out = el.querySelector(".tick");
     if (!out) return;
     const diff = target - now;
@@ -781,7 +880,7 @@ function bind() {
     link.addEventListener("click", (event) => {
       event.preventDefault();
       const next = link.dataset.view;
-      if (next !== "new" && next !== "old" && next !== "all") return;
+      if (!VALID_VIEWS.has(next)) return;
       view = next;
       syncHash(next);
       painted = "";
@@ -817,10 +916,8 @@ function setSync(text) {
 }
 function nearDraw() {
   const now = new Date();
-  return ["21:32", "22:32"].some((clock) => {
-    const parts = clock.split(":");
-    const target = new Date(now);
-    target.setHours(Number(parts[0]), Number(parts[1]), 0, 0);
+  return KINDS.some((kind) => {
+    const target = nextDrawAt(kind, now);
     const diff = now - target;
     return diff > -2 * 60000 && diff < 25 * 60000;
   });
@@ -831,14 +928,22 @@ async function runRefresh(replace) {
   errorLatched = false;
   setSync(replace ? "1.7 正在重置本期…" : "1.7 正在读取最新开奖…");
   try {
-    const newer = await loadDraws("new");
-    const older = await loadDraws("old");
+    const histories = {};
+    for (let i = 0; i < KINDS.length; i += 1) {
+      const kind = KINDS[i];
+      histories[kind] = await loadDraws(kind);
+    }
     setSync("开奖已取到，正在计算…");
     await paint();
     const next = loadRows();
-    reconcile("new", newer, next);
-    reconcile("old", older, next);
-    const nextPayloads = [recommend(newer, "new", next, replace), recommend(older, "old", next, replace)];
+    const nextPayloads = [];
+    for (let i = 0; i < KINDS.length; i += 1) {
+      const kind = KINDS[i];
+      reconcile(kind, histories[kind], next);
+      const payload = recommend(histories[kind], kind, next, replace);
+      if (SOURCES[kind].scheduleNote) payload.scheduleNote = SOURCES[kind].scheduleNote;
+      nextPayloads.push(payload);
+    }
     saveRows(next);
     payloads = nextPayloads;
     localStorage.setItem(CACHE_KEY, JSON.stringify({ payloads: nextPayloads, rows: next }));
