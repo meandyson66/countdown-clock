@@ -71,7 +71,7 @@ public class MainActivity extends Activity {
         webView.setLongClickable(true);
         webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
         setContentView(webView);
-        webView.loadUrl("file:///android_asset/app.html?v=8");
+        webView.loadUrl("file:///android_asset/app.html?v=9");
     }
 
     @Override

@@ -238,7 +238,7 @@ async function loadDraws(kind) {
   const errors = [];
   for (let target = year - 1; target <= year; target += 1) {
     const url = `https://history.macaumarksix.com/history/${meta.code}/y/${target}`;
-    setSync("1.7 正在读取" + meta.name + " " + target);
+    setSync("1.8 正在读取" + meta.name + " " + target);
     try {
       const text = await httpGet(url);
       let body = null;
@@ -279,7 +279,7 @@ async function loadHongKongDrawsCustom() {
   for (let target = year - 1; target <= year; target += 1) {
     for (let page = 1; page <= 20; page += 1) {
       const url = HK_API.historyUrl(target, page);
-      setSync("1.7 正在读取香港 21:30 " + target + " 第" + page + "页");
+      setSync("1.8 正在读取香港 21:30 " + target + " 第" + page + "页");
       try {
         const text = await httpGet(url);
         const body = JSON.parse(text);
@@ -926,7 +926,7 @@ async function runRefresh(replace) {
   if (isCalculating) return;
   isCalculating = true;
   errorLatched = false;
-  setSync(replace ? "1.7 正在重置本期…" : "1.7 正在读取最新开奖…");
+  setSync(replace ? "1.8 正在重置本期…" : "1.8 正在读取最新开奖…");
   try {
     const histories = {};
     for (let i = 0; i < KINDS.length; i += 1) {
@@ -1003,10 +1003,10 @@ function boot() {
       rows = cached.rows || [];
       render(true);
     } else {
-      document.querySelector("#app").innerHTML = `<section class="panel"><h2>正在计算</h2><p class="fine" id="status">1.7 正在读取最新开奖…</p></section>`;
+      document.querySelector("#app").innerHTML = `<section class="panel"><h2>正在计算</h2><p class="fine" id="status">1.8 正在读取最新开奖…</p></section>`;
     }
   } catch (error) {
-    document.querySelector("#app").innerHTML = `<section class="panel"><h2>正在计算</h2><p class="fine" id="status">1.7 正在读取最新开奖…</p></section>`;
+    document.querySelector("#app").innerHTML = `<section class="panel"><h2>正在计算</h2><p class="fine" id="status">1.8 正在读取最新开奖…</p></section>`;
   }
   runRefresh(false).finally(arm);
   setInterval(tick, 1000);
