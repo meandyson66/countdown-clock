@@ -303,7 +303,7 @@ async function loadDraws(kind) {
   const errors = [];
   for (let target = year - 1; target <= year; target += 1) {
     const url = `https://history.macaumarksix.com/history/${meta.code}/y/${target}`;
-    setSync("1.8.4 正在读取" + meta.name + " " + target);
+    setSync("2.0 正在读取" + meta.name + " " + target);
     try {
       const text = await httpGet(url);
       let body = null;
@@ -344,7 +344,7 @@ async function loadHongKongDrawsCustom() {
   for (let target = year - 1; target <= year; target += 1) {
     for (let page = 1; page <= 20; page += 1) {
       const url = HK_API.historyUrl(target, page);
-      setSync("1.8.4 正在读取香港 21:30 " + target + " 第" + page + "页");
+      setSync("2.0 正在读取香港 21:30 " + target + " 第" + page + "页");
       try {
         const text = await httpGet(url);
         const body = JSON.parse(text);
@@ -1118,6 +1118,7 @@ function openHistoryModal(number, kind) {
   backdrop.hidden = false;
   modal.setAttribute("aria-hidden", "false");
   renderHistoryModal();
+  lockUiScroll();
   requestAnimationFrame(() => {
     requestAnimationFrame(() => modal.classList.add("is-open"));
   });
@@ -1134,6 +1135,7 @@ function closeHistoryModal() {
     modal.classList.remove("is-closing");
     modal.setAttribute("aria-hidden", "true");
     if (backdrop) backdrop.hidden = true;
+    unlockUiScroll();
   };
   let closed = false;
   const onEnd = (event) => {
@@ -1155,6 +1157,7 @@ function bindHistorySheetDrag() {
   const modal = document.getElementById("historyModal");
   const grab = document.getElementById("history-grab");
   const head = document.querySelector(".history-sheet-drag");
+  const body = modal?.querySelector(".history-body");
   if (!modal || modal.dataset.dragBound === "1") return;
   modal.dataset.dragBound = "1";
   let startY = 0;
@@ -1167,10 +1170,42 @@ function bindHistorySheetDrag() {
     dragY = 0;
     modal.classList.remove("is-dragging");
     modal.style.transform = "";
+    document.removeEventListener("touchmove", onDragMove);
+    document.removeEventListener("touchend", onDragEnd);
+    document.removeEventListener("touchcancel", onDragEnd);
   };
   const snapOpen = () => {
     resetDrag();
     modal.classList.add("is-open");
+  };
+  const onDragMove = (event) => {
+    if (!dragging) return;
+    const dy = event.touches[0].clientY - startY;
+    if (dy <= 0) return;
+    dragged = true;
+    dragY = dy;
+    modal.style.transform = `translateY(${dy}px)`;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  const onDragEnd = (event) => {
+    if (!dragging) return;
+    const shouldClose = dragY > 72 || (dragged && dragY > 36);
+    const wasDragged = dragged;
+    if (shouldClose) {
+      modal.classList.remove("is-dragging");
+      modal.style.transform = "";
+      resetDrag();
+      closeHistoryModal();
+      return;
+    }
+    snapOpen();
+    if (wasDragged) {
+      setTimeout(() => { dragged = false; }, 100);
+    } else {
+      dragged = false;
+    }
+    event.stopPropagation();
   };
   dragStarts.forEach((el) => {
     el.addEventListener("touchstart", (event) => {
@@ -1178,35 +1213,19 @@ function bindHistorySheetDrag() {
       startY = event.touches[0].clientY;
       dragging = true;
       dragged = false;
+      dragY = 0;
       modal.classList.add("is-dragging");
+      event.stopPropagation();
+      document.addEventListener("touchmove", onDragMove, { passive: false });
+      document.addEventListener("touchend", onDragEnd, { passive: true });
+      document.addEventListener("touchcancel", onDragEnd, { passive: true });
     }, { passive: true });
   });
-  modal.addEventListener("touchmove", (event) => {
-    if (!dragging) return;
-    const dy = event.touches[0].clientY - startY;
-    if (dy <= 0) return;
-    dragged = true;
-    dragY = dy;
-    modal.style.transform = `translateY(${dragY}px)`;
-  }, { passive: true });
-  const endDrag = () => {
-    if (!dragging) return;
-    const shouldClose = dragY > 72 || (dragged && dragY > 36);
-    const wasDragged = dragged;
-    dragging = false;
-    if (shouldClose) {
-      modal.classList.remove("is-dragging");
-      modal.style.transform = "";
-      closeHistoryModal();
-      return;
-    }
-    snapOpen();
-    if (wasDragged) {
-      setTimeout(() => { dragged = false; }, 80);
-    }
-  };
-  modal.addEventListener("touchend", endDrag, { passive: true });
-  modal.addEventListener("touchcancel", endDrag, { passive: true });
+  if (body) {
+    ["touchstart", "touchmove"].forEach((name) => {
+      body.addEventListener(name, (event) => event.stopPropagation(), { passive: true });
+    });
+  }
   if (grab) {
     grab.addEventListener("click", () => {
       if (dragged) return;
@@ -1287,6 +1306,22 @@ window.getCurrentGameType = getCurrentGameType;
 window.COLOR_RULES = COLOR_RULES;
 
 const DOCK_COLLAPSED_KEY = "macau-dock-collapsed";
+let uiScrollLocks = 0;
+function lockUiScroll() {
+  if (uiScrollLocks++) return;
+  const y = window.scrollY || 0;
+  document.documentElement.classList.add("ui-scroll-lock");
+  document.documentElement.style.setProperty("--scroll-lock-y", `${-y}px`);
+  document.body.dataset.uiScrollY = String(y);
+}
+function unlockUiScroll() {
+  if (uiScrollLocks > 0) uiScrollLocks -= 1;
+  if (uiScrollLocks > 0) return;
+  const y = Number(document.body.dataset.uiScrollY || 0);
+  document.documentElement.classList.remove("ui-scroll-lock");
+  document.documentElement.style.removeProperty("--scroll-lock-y");
+  window.scrollTo(0, y);
+}
 function setDockCollapsed(collapsed) {
   const dock = document.getElementById("bottom-dock");
   const toggle = document.getElementById("dock-toggle");
@@ -1316,18 +1351,52 @@ function initBottomDock() {
   if (!dock || !toggle || dock.dataset.bound === "1") return;
   dock.dataset.bound = "1";
   setDockCollapsed(dockDefaultCollapsed());
+  let startY = 0;
+  let gesturing = false;
+  let moved = false;
   toggle.addEventListener("click", () => {
+    if (moved) return;
     setDockCollapsed(!dock.classList.contains("is-collapsed"));
   });
-  let touchY = 0;
-  dock.addEventListener("touchstart", (event) => {
-    touchY = event.touches[0].clientY;
+  toggle.addEventListener("touchstart", (event) => {
+    startY = event.touches[0].clientY;
+    gesturing = true;
+    moved = false;
+    lockUiScroll();
+    event.stopPropagation();
   }, { passive: true });
-  dock.addEventListener("touchend", (event) => {
-    const dy = event.changedTouches[0].clientY - touchY;
-    if (dy > 40) setDockCollapsed(true);
-    else if (dy < -40) setDockCollapsed(false);
-  }, { passive: true });
+  toggle.addEventListener("touchmove", (event) => {
+    if (!gesturing) return;
+    const dy = event.touches[0].clientY - startY;
+    if (Math.abs(dy) > 8) {
+      moved = true;
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }, { passive: false });
+  const endGesture = (event) => {
+    if (!gesturing) return;
+    gesturing = false;
+    unlockUiScroll();
+    const dy = event.changedTouches[0].clientY - startY;
+    if (Math.abs(dy) >= 40) {
+      if (dy > 0) setDockCollapsed(true);
+      else setDockCollapsed(false);
+    }
+    if (moved) {
+      setTimeout(() => { moved = false; }, 100);
+    }
+    event.stopPropagation();
+  };
+  toggle.addEventListener("touchend", endGesture, { passive: true });
+  toggle.addEventListener("touchcancel", endGesture, { passive: true });
+  const stopBubble = (event) => event.stopPropagation();
+  const dockBody = dock.querySelector(".dock-body");
+  if (dockBody) {
+    ["touchstart", "touchmove"].forEach((name) => {
+      dockBody.addEventListener(name, stopBubble, { passive: true });
+    });
+  }
 }
 
 function bind() {
@@ -1387,7 +1456,7 @@ async function runRefresh(replace) {
   if (isCalculating) return;
   isCalculating = true;
   errorLatched = false;
-  setSync(replace ? "1.8.4 正在重置本期…" : "1.8.4 正在读取最新开奖…");
+  setSync(replace ? "2.0 正在重置本期…" : "2.0 正在读取最新开奖…");
   try {
     const histories = {};
     for (let i = 0; i < KINDS.length; i += 1) {
@@ -1467,10 +1536,10 @@ function boot() {
       rows = cached.rows || [];
       render(true);
     } else {
-      document.querySelector("#app").innerHTML = `<section class="panel"><h2>正在计算</h2><p class="fine" id="status">1.8.4 正在读取最新开奖…</p></section>`;
+      document.querySelector("#app").innerHTML = `<section class="panel"><h2>正在计算</h2><p class="fine" id="status">2.0 正在读取最新开奖…</p></section>`;
     }
   } catch (error) {
-    document.querySelector("#app").innerHTML = `<section class="panel"><h2>正在计算</h2><p class="fine" id="status">1.8.4 正在读取最新开奖…</p></section>`;
+    document.querySelector("#app").innerHTML = `<section class="panel"><h2>正在计算</h2><p class="fine" id="status">2.0 正在读取最新开奖…</p></section>`;
   }
   runRefresh(false).finally(arm);
   setInterval(tick, 1000);

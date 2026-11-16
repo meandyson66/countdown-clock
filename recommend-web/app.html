@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>特码推荐</title>
-  <link rel="stylesheet" href="app.css?v=history-sheet">
+  <link rel="stylesheet" href="app.css?v=history-touch">
 </head>
 <body>
   <svg class="branch" viewBox="0 0 480 230" aria-hidden="true">
@@ -18,7 +18,7 @@
   </svg>
   <canvas id="petals" aria-hidden="true"></canvas>
   <main id="app">
-    <section class="panel"><h2>正在计算</h2><p class="fine" id="status">1.8.4 正在读取最新开奖…</p></section>
+    <section class="panel"><h2>正在计算</h2><p class="fine" id="status">2.0 正在读取最新开奖…</p></section>
   </main>
   <div id="historyBackdrop" class="history-backdrop" hidden></div>
   <div id="historyModal" class="history-sheet" hidden aria-hidden="true" role="dialog" aria-labelledby="modalTitle">
@@ -72,7 +72,7 @@
       <div class="history-official" id="historyListContainer"></div>
     </div>
   </div>
-  <script src="engine.js?v=history-sheet"></script>
+  <script src="engine.js?v=history-touch"></script>
   <script>
     const canvas = document.getElementById("petals");
     const ctx = canvas.getContext("2d");
