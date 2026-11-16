@@ -37,8 +37,54 @@ const SOURCES = {
 const HK_API = {};
 const ZODIACS = ["鼠", "牛", "虎", "兔", "龙", "蛇", "马", "羊", "猴", "鸡", "狗", "猪"];
 const TRAD = { "雞": "鸡", "龍": "龙", "馬": "马", "豬": "猪" };
-const RED = new Set([1, 2, 7, 8, 12, 13, 18, 19, 23, 24, 29, 30, 34, 35, 40, 45, 46]);
-const BLUE = new Set([3, 4, 9, 10, 14, 15, 20, 25, 26, 31, 36, 37, 41, 42, 47, 48]);
+/** 各彩种波色归属（绿波 = 未列入红/蓝的号码） */
+const COLOR_RULES = {
+  /** 香港：与澳门相同的红 / 蓝 / 绿三波 */
+  hk: {
+    red: [1, 2, 7, 8, 12, 13, 18, 19, 23, 24, 29, 30, 34, 35, 40, 45, 46],
+    blue: [3, 4, 9, 10, 14, 15, 20, 25, 26, 31, 36, 37, 41, 42, 47, 48],
+  },
+  /** 新澳门：红 / 蓝 / 绿 三波 */
+  new: {
+    red: [1, 2, 7, 8, 12, 13, 18, 19, 23, 24, 29, 30, 34, 35, 40, 45, 46],
+    blue: [3, 4, 9, 10, 14, 15, 20, 25, 26, 31, 36, 37, 41, 42, 47, 48],
+  },
+  /** 老澳门：红 / 蓝 / 绿 三波 */
+  old: {
+    red: [1, 2, 7, 8, 12, 13, 18, 19, 23, 24, 29, 30, 34, 35, 40, 45, 46],
+    blue: [3, 4, 9, 10, 14, 15, 20, 25, 26, 31, 36, 37, 41, 42, 47, 48],
+  },
+};
+const colorSetCache = {};
+function colorSetsFor(kind) {
+  const key = COLOR_RULES[kind] ? kind : "new";
+  if (colorSetCache[key]) return colorSetCache[key];
+  const rules = COLOR_RULES[key];
+  colorSetCache[key] = {
+    red: new Set(rules.red),
+    blue: new Set(rules.blue || []),
+  };
+  return colorSetCache[key];
+}
+function normalizeColorKind(kind) {
+  const map = {
+    hk: "hk", hkjc: "hk", 香港: "hk",
+    new: "new", xinao: "new", new_macau: "new", 新澳门: "new",
+    old: "old", laoao: "old", old_macau: "old", 老澳门: "old",
+  };
+  const raw = String(kind || "").trim();
+  return map[raw] || (COLOR_RULES[raw] ? raw : null);
+}
+function currentColorKind(kind) {
+  const explicit = normalizeColorKind(kind);
+  if (explicit) return explicit;
+  if (view === "new" || view === "old" || view === "hk") return view;
+  if (statsModal && statsModal.kind) return statsModal.kind;
+  return "new";
+}
+function getCurrentGameType() {
+  return currentColorKind();
+}
 const ROW_KEY = "macau-ledger-v1";
 const STAKE_KEY = "macau-stake-v1";
 const CACHE_KEY = "macau-cache-v1";
@@ -49,7 +95,7 @@ let isRendering = false;
 let payloads = [];
 let rows = [];
 let historyCache = { new: [], old: [], hk: [] };
-let statsModal = { kind: "new", number: 17, search: "" };
+let statsModal = { kind: "new", number: 17, days: 30 };
 let historyShellBound = false;
 let pollTimer = 0;
 const pendingHttp = {};
@@ -61,10 +107,15 @@ function mod(value, base) {
 function pad2(number) {
   return String(number).padStart(2, "0");
 }
-function colorName(number) {
-  if (RED.has(number)) return "红";
-  if (BLUE.has(number)) return "蓝";
+function colorName(number, kind) {
+  const n = Number(number);
+  const sets = colorSetsFor(currentColorKind(kind));
+  if (sets.red.has(n)) return "红";
+  if (sets.blue.has(n)) return "蓝";
   return "绿";
+}
+function ballToneClass(number, kind) {
+  return tone(colorName(number, kind));
 }
 function parityName(number) {
   return number % 2 ? "单" : "双";
@@ -381,7 +432,7 @@ function topZodiacs(history, windowSize, top) {
     return 0;
   }).slice(0, top);
 }
-function scorePool(pool, history, ranked, zodiacTop, index, gaps) {
+function scorePool(pool, history, ranked, zodiacTop, index, gaps, kind) {
   const rankOf = {};
   ranked.forEach(([name], pos) => { rankOf[name] = pos + 1; });
   const rankedCount = Object.fromEntries(ranked);
@@ -389,14 +440,14 @@ function scorePool(pool, history, ranked, zodiacTop, index, gaps) {
   const colorCounts = { "红": 0, "蓝": 0, "绿": 0 };
   const parityCounts = { "单": 0, "双": 0 };
   windowDraws.forEach((draw) => {
-    colorCounts[colorName(draw.special)] += 1;
+    colorCounts[colorName(draw.special, kind)] += 1;
     parityCounts[parityName(draw.special)] += 1;
   });
   const colorPeak = maxValue(colorCounts);
   const parityPeak = maxValue(parityCounts);
   const picks = pool.map((number) => {
     const zodiac = zodiacOf(index, number);
-    const color = colorName(number);
+    const color = colorName(number, kind);
     const parity = parityName(number);
     const rank = rankOf[zodiac] || zodiacTop;
     const colorGap = colorPeak - colorCounts[color];
@@ -461,7 +512,7 @@ function balance(picks, ranked) {
   if (missing.length) note += "，" + missing.join("、") + "在过滤后没有号码";
   return { selected, note };
 }
-function selectPicks(history) {
+function selectPicks(history, kind) {
   if (!history.length) {
     return { picks: [], funnel: { zodiacs: [], coldDropped: 0, omissionMax: SETTINGS.omissionMax, note: "没有历史记录" } };
   }
@@ -488,7 +539,7 @@ function selectPicks(history) {
     ranked = topZodiacs(history, SETTINGS.zodiacWindow, zodiacTop);
     const allowed = new Set(ranked.map(([name]) => name));
     pool = afterExtreme.filter((number) => allowed.has(zodiacOf(index, number)));
-    const scored = scorePool(pool, history, ranked, zodiacTop, index, gaps);
+    const scored = scorePool(pool, history, ranked, zodiacTop, index, gaps, kind);
     const balanced = balance(scored, ranked);
     selected = balanced.selected;
     balanceNote = balanced.note;
@@ -507,7 +558,7 @@ function selectPicks(history) {
     },
   };
 }
-function backtest(history, limit) {
+function backtest(history, limit, kind) {
   let hits = 0;
   let evaluated = 0;
   let streak = 0;
@@ -515,7 +566,7 @@ function backtest(history, limit) {
   for (let index = 0; index < limit; index += 1) {
     const past = history.slice(index + 1);
     if (past.length < Math.max(SETTINGS.zodiacWindow, SETTINGS.momentumWindow)) break;
-    const chosen = new Set(selectPicks(past).picks.map((pick) => Number(pick.number)));
+    const chosen = new Set(selectPicks(past, kind).picks.map((pick) => Number(pick.number)));
     const hit = chosen.has(history[index].special);
     evaluated += 1;
     if (hit) streakOpen = false;
@@ -566,7 +617,7 @@ function reconcile(kind, history, next) {
 function pendingFor(kind, issue, next) {
   return next.find((row) => row["类型"] === kind && row["期号"] === issue && row["是否命中"] === "待开奖") || null;
 }
-function lockedPicks(numbers, history) {
+function lockedPicks(numbers, history, kind) {
   const omission = omissionMap(history);
   const index = history.length ? yearIndex(history[0]) : 0;
   return numbers.map((raw) => {
@@ -574,7 +625,7 @@ function lockedPicks(numbers, history) {
     return {
       number: pad2(number),
       zodiac: zodiacOf(index, number),
-      color: colorName(number),
+      color: colorName(number, kind),
       parity: parityName(number),
       omission: omission[number] === undefined ? history.length : omission[number],
       score: 0,
@@ -585,18 +636,18 @@ function recommend(history, kind, next, replace) {
   const latest = history[0];
   const issue = latest.expectNum ? String(latest.expectNum + 1) : "";
   const lockedRow = replace ? null : pendingFor(kind, issue, next);
-  let { picks, funnel } = selectPicks(history);
+  let { picks, funnel } = selectPicks(history, kind);
   let locked = false;
   if (lockedRow) {
     const numbers = String(lockedRow["推荐号码"] || "").split(/\s+/).filter(Boolean);
     if (numbers.length) {
-      picks = lockedPicks(numbers, history);
+      picks = lockedPicks(numbers, history, kind);
       locked = true;
       funnel.note = "本期推荐已锁定。重新计算只更新回测，不改号码。";
     }
   }
-  const long = backtest(history, SETTINGS.longWindow);
-  const short = backtest(history, SETTINGS.backtestWindow);
+  const long = backtest(history, SETTINGS.longWindow, kind);
+  const short = backtest(history, SETTINGS.backtestWindow, kind);
   let stake;
   let spent;
   if (locked) {
@@ -691,10 +742,10 @@ function ballsHtml(payload) {
     + `<small>${escapeHtml(item.zodiac)} · ${escapeHtml(item.color)}</small></button>`
   )).join("");
 }
-function minisHtml(numbers) {
+function minisHtml(numbers, kind) {
   return String(numbers || "").split(/\s+/).filter(Boolean).map((raw) => {
     const number = Number(raw);
-    return `<i class="mini ${tone(colorName(number))}">${pad2(number)}</i>`;
+    return `<i class="mini ${ballToneClass(number, kind)}">${pad2(number)}</i>`;
   }).join("");
 }
 function stageHtml(payload) {
@@ -775,7 +826,7 @@ function ledgerHtml() {
         <span class="num period ${moneyClass(row["本期盈亏"])}"><i class="ph">本期</i>${escapeHtml(row["本期盈亏"] || "—")}</span>
         <span class="num total ${moneyClass(row["累计盈亏"])}"><i class="ph">累计</i>${escapeHtml(row["累计盈亏"] || "—")}</span>
       </span>
-      <span class="minis">${minisHtml(row["推荐号码"])}</span>
+      <span class="minis">${minisHtml(row["推荐号码"], row["类型"])}</span>
     </div>`;
   }).join("");
   return `<section class="panel"><div class="ledger-head"><h2>实盘对账</h2><div class="capsules">${summaryHtml()}</div></div>
@@ -882,108 +933,123 @@ function defaultStatsKind() {
   if (view === "new" || view === "old" || view === "hk") return view;
   return "new";
 }
-function analyzeNumber(history, num) {
+function parseDrawDate(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(String(dateStr).replace(/-/g, "/"));
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+function historyAnchorDate(history) {
+  for (let i = 0; i < history.length; i += 1) {
+    const d = parseDrawDate(history[i].date);
+    if (d) return d;
+  }
+  return new Date();
+}
+function drawWithinDays(draw, days, anchor) {
+  const d = parseDrawDate(draw.date);
+  if (!d) return true;
+  const cutoff = new Date(anchor);
+  cutoff.setDate(cutoff.getDate() - Number(days));
+  cutoff.setHours(0, 0, 0, 0);
+  const when = new Date(d);
+  when.setHours(0, 0, 0, 0);
+  return when >= cutoff;
+}
+function countNumberInRange(history, num, days) {
   const n = Number(num);
-  const totalDraws = history.length;
-  let specialCount = 0;
-  const gapBetween = [];
-  let lastSpecialAt = -1;
-  const timeline = [];
+  const anchor = historyAnchorDate(history);
+  let teCount = 0;
+  let pingCount = 0;
   for (let i = 0; i < history.length; i += 1) {
     const draw = history[i];
-    const isSpecial = draw.special === n;
-    const inMain = draw.nums.slice(0, -1).includes(n);
-    if (isSpecial) {
-      specialCount += 1;
-      if (lastSpecialAt >= 0) gapBetween.push(i - lastSpecialAt);
-      lastSpecialAt = i;
-    }
-    if (isSpecial || inMain) {
-      timeline.push({
-        expect: draw.expect,
-        date: draw.date,
-        isSpecial,
-        label: isSpecial ? "特码开出 命中" : "平码开出",
-      });
-    }
+    if (!drawWithinDays(draw, days, anchor)) continue;
+    if (draw.special === n) teCount += 1;
+    else if (draw.nums.slice(0, -1).includes(n)) pingCount += 1;
   }
-  const currentOmit = lastSpecialAt >= 0 ? lastSpecialAt : totalDraws;
-  let maxOmit = currentOmit;
-  gapBetween.forEach((gap) => { if (gap > maxOmit) maxOmit = gap; });
-  const avgGap = gapBetween.length
-    ? (gapBetween.reduce((sum, gap) => sum + gap, 0) / gapBetween.length).toFixed(1)
-    : "—";
-  const pct = totalDraws ? (specialCount / totalDraws * 100).toFixed(1) : "0.0";
-  const omitLabel = currentOmit >= 15 ? "偏冷" : "安全";
-  return {
-    totalDraws,
-    specialCount,
-    pct,
-    currentOmit,
-    maxOmit,
-    avgGap,
-    omitLabel,
-    timeline: timeline.slice(0, 20),
-  };
+  return { teCount, pingCount };
 }
-function historyMatchesSearch(draw, keyword) {
-  const key = String(keyword || "").trim();
-  if (!key) return true;
-  if (/^\d{1,2}$/.test(key)) {
-    const n = Number(key);
-    return draw.nums.includes(n);
-  }
-  return String(draw.expect || "").includes(key) || String(draw.date || "").includes(key);
+function syncTimeFilterButtons() {
+  const days = statsModal.days;
+  document.querySelectorAll(".time-btn").forEach((btn) => {
+    btn.classList.toggle("active", Number(btn.dataset.days) === days);
+  });
+}
+function updatePeriodStats() {
+  const kind = statsModal.kind;
+  const history = historyCache[kind] || [];
+  const num = statsModal.number;
+  const { teCount, pingCount } = countNumberInRange(history, num, statsModal.days);
+  const teEl = document.getElementById("statTeCount");
+  const pingEl = document.getElementById("statPingCount");
+  if (teEl) teEl.textContent = `${teCount} 次`;
+  if (pingEl) pingEl.textContent = `${pingCount} 次`;
 }
 function drawTimeLabel(kind, draw) {
   const clock = SOURCES[kind] && SOURCES[kind].clock;
   return clock ? `${draw.date} ${clock}` : draw.date;
 }
-function officialDrawCardHtml(draw, kind) {
+function histBallSpan(n, pos, draw, kind, isSpecial) {
   const index = yearIndex(draw);
-  const balls = draw.nums.map((n, pos) => {
-    const zodiac = draw.zodiacs[pos] || zodiacOf(index, n);
-    const wave = tone(colorName(n));
-    const special = pos === draw.nums.length - 1 ? " special" : "";
-    return `<button type="button" class="hist-ball ${wave}${special}" data-number="${pad2(n)}" data-kind="${kind}"><b>${pad2(n)}</b><small>${escapeHtml(zodiac)}·${escapeHtml(colorName(n))}</small></button>`;
-  }).join("");
-  return `<article class="history-draw-card"><header><strong>${escapeHtml(draw.expect)}期</strong><time>${escapeHtml(drawTimeLabel(kind, draw))}</time></header><div class="history-draw-balls">${balls}</div></article>`;
+  const zodiac = draw.zodiacs[pos] || zodiacOf(index, n);
+  const wave = ballToneClass(n, kind);
+  const special = isSpecial ? " special" : "";
+  const role = isSpecial ? " te-code-ball" : " ping-code-ball";
+  return `<span class="hist-ball ${wave}${special}${role}"><b class="hist-ball-num">${pad2(n)}</b><small>${escapeHtml(zodiac)}·${escapeHtml(colorName(n, kind))}</small></span>`;
+}
+function splitDrawNums(draw) {
+  const nums = Array.isArray(draw.nums) ? draw.nums : [];
+  if (nums.length >= 7) {
+    return { ping: nums.slice(0, 6), special: Number(draw.special ?? nums[6]), specialPos: 6 };
+  }
+  if (nums.length > 0) {
+    const specialPos = nums.length - 1;
+    return { ping: nums.slice(0, specialPos), special: Number(draw.special ?? nums[specialPos]), specialPos };
+  }
+  const solo = Number(draw.special);
+  return { ping: [], special: Number.isFinite(solo) ? solo : NaN, specialPos: 0 };
+}
+function officialDrawCardHtml(draw, kind) {
+  const dateAttr = escapeHtml(String(draw.date || ""));
+  const { ping, special, specialPos } = splitDrawNums(draw);
+  const pingHtml = ping.map((n, pos) => histBallSpan(n, pos, draw, kind, false)).join("");
+  const pingRow = pingHtml || `<span class="fine">平码 —</span>`;
+  const teBall = Number.isFinite(special) && special >= 1 && special <= 49
+    ? histBallSpan(special, specialPos, draw, kind, true)
+    : `<span class="hist-ball special te-code-ball"><b class="hist-ball-num">—</b></span>`;
+  return `<article class="history-draw-card history-period-item" data-date="${dateAttr}"><header><strong>${escapeHtml(draw.expect)}期</strong><time>${escapeHtml(drawTimeLabel(kind, draw))}</time></header>`
+    + `<div class="history-draw-balls"><div class="history-draw-ping">${pingRow}</div>`
+    + `<span class="history-draw-plus" aria-hidden="true">+</span>`
+    + `<div class="history-draw-special"><span class="history-te-tag">特码</span>${teBall}</div></div></article>`;
 }
 function renderOfficialHistoryList() {
   const root = document.getElementById("historyListContainer");
   if (!root) return;
   const kind = statsModal.kind;
   const history = historyCache[kind] || [];
-  const keyword = statsModal.search;
-  const filtered = history.filter((draw) => historyMatchesSearch(draw, keyword)).slice(0, 60);
+  const anchor = historyAnchorDate(history);
+  const days = statsModal.days;
+  const filtered = history
+    .filter((draw) => drawWithinDays(draw, days, anchor))
+    .slice(0, 120);
   if (!history.length) {
     root.innerHTML = `<p class="fine">正在等待开奖数据…请稍后重新打开历史统计。</p>`;
     return;
   }
   if (!filtered.length) {
-    root.innerHTML = `<p class="fine">没有匹配「${escapeHtml(keyword)}」的期号或号码。</p>`;
+    root.innerHTML = `<p class="fine">所选时间范围内暂无开奖记录。</p>`;
     return;
   }
   root.innerHTML = filtered.map((draw) => officialDrawCardHtml(draw, kind)).join("");
-  root.querySelectorAll(".hist-ball").forEach((ball) => {
-    ball.addEventListener("click", () => {
-      statsModal.number = Number(ball.dataset.number);
-      statsModal.kind = ball.dataset.kind || kind;
-      renderHistoryModal();
-    });
-  });
 }
 function renderHistoryModal() {
   const modal = document.getElementById("historyModal");
   if (!modal || modal.hidden) return;
   const kind = statsModal.kind;
-  const history = historyCache[kind] || [];
   const num = Number(statsModal.number);
   const name = (SOURCES[kind] && SOURCES[kind].name) || kind;
-  const searchInput = document.getElementById("historySearchInput");
-  if (searchInput && searchInput.value !== statsModal.search) searchInput.value = statsModal.search;
+  syncTimeFilterButtons();
   renderOfficialHistoryList();
-  const stats = analyzeNumber(history, num);
+  updatePeriodStats();
   const badge = document.getElementById("modalNumberBadge");
   const title = document.getElementById("modalTitle");
   if (badge) badge.textContent = pad2(num);
@@ -991,34 +1057,15 @@ function renderHistoryModal() {
   document.querySelectorAll(".history-subtab").forEach((el) => {
     el.classList.toggle("on", el.dataset.statsKind === kind);
   });
-  const metrics = document.getElementById("historyMetrics");
-  if (metrics) {
-    metrics.innerHTML = `
-      <div class="history-metric"><k>特码历史开出</k><b>${stats.specialCount} 次 <em>(占比 ${stats.pct}%)</em></b></div>
-      <div class="history-metric"><k>当前遗漏期数</k><b class="warn">${stats.currentOmit} 期 <em>(${stats.omitLabel})</em></b></div>
-      <div class="history-metric"><k>历史最大遗漏</k><b class="neutral">${stats.maxOmit} 期</b></div>
-      <div class="history-metric"><k>平均出号间隔</k><b class="neutral">${stats.avgGap} 期</b></div>`;
-  }
   const grid = document.getElementById("miniNumberGrid");
   if (grid) {
     let html = "";
     for (let pick = 1; pick <= 49; pick += 1) {
-      const wave = tone(colorName(pick));
+      const wave = ballToneClass(pick, kind);
       const on = pick === num ? " on" : "";
-      html += `<button type="button" class="${wave}${on}" data-pick="${pick}">${pad2(pick)}</button>`;
+      html += `<button type="button" class="${wave}${on}" data-pick="${pick}" data-kind="${kind}">${pad2(pick)}</button>`;
     }
     grid.innerHTML = html;
-  }
-  const lines = document.getElementById("historyTimeline");
-  if (lines) {
-    if (!stats.timeline.length) {
-      lines.innerHTML = `<p class="fine">暂无该号码在本彩种已加载记录中的出现数据。</p>`;
-    } else {
-      lines.innerHTML = stats.timeline.map((row, index) => (
-        `<div class="line${index % 2 ? " alt" : ""}"><span>${escapeHtml(row.expect)}期 · ${escapeHtml(row.date || "")}</span>`
-        + `<span class="${row.isSpecial ? "hit" : "plain"}">${escapeHtml(row.label)}</span></div>`
-      )).join("");
-    }
   }
 }
 function openHistoryModal(number, kind) {
@@ -1069,12 +1116,21 @@ function bindHistoryShell() {
       renderHistoryModal();
     });
   }
-  const searchInput = document.getElementById("historySearchInput");
-  if (searchInput) {
-    searchInput.addEventListener("input", (event) => {
-      handleHistorySearch(event.target.value);
+  const timeFilter = document.querySelector(".time-filter-section");
+  if (timeFilter) {
+    timeFilter.addEventListener("click", (event) => {
+      const btn = event.target.closest(".time-btn");
+      if (!btn) return;
+      filterByTime(Number(btn.dataset.days));
     });
   }
+}
+function filterByTime(days) {
+  if (!Number.isFinite(days) || days <= 0) return;
+  statsModal.days = days;
+  syncTimeFilterButtons();
+  renderOfficialHistoryList();
+  updatePeriodStats();
 }
 window.openHistoryModal = openHistoryModal;
 window.closeHistoryModal = closeHistoryModal;
@@ -1093,14 +1149,15 @@ window.filterLottery = (type) => {
   statsModal.kind = type;
   renderHistoryModal();
 };
-window.handleHistorySearch = (keyword) => {
-  statsModal.search = String(keyword || "").trim();
-  renderOfficialHistoryList();
-};
+window.handleNumSearch = () => {};
+window.handleHistorySearch = () => {};
 window.selectNum = (num) => {
   statsModal.number = Number(num);
   renderHistoryModal();
 };
+window.filterByTime = filterByTime;
+window.getCurrentGameType = getCurrentGameType;
+window.COLOR_RULES = COLOR_RULES;
 
 function bind() {
   document.querySelectorAll("[data-view]").forEach((link) => {

@@ -36,24 +36,37 @@
         <button type="button" class="history-subtab lottery-tab" data-stats-kind="old">老澳门</button>
         <button type="button" class="history-subtab lottery-tab" data-stats-kind="hk">香港</button>
       </div>
-      <label class="history-search" for="historySearchInput">
-        <span class="history-search-icon" aria-hidden="true">🔍</span>
-        <input type="search" id="historySearchInput" placeholder="输入期号（如 2026320）或号码（如 17）快速检索…" autocomplete="off">
-      </label>
-      <div class="history-official" id="historyListContainer"></div>
-      <p class="history-section-label">号码深度分析</p>
-      <div class="history-metrics" id="historyMetrics"></div>
-      <div class="history-card">
+      <div class="history-card history-pick-card">
         <p class="history-card-title">快速切换分析号码</p>
         <div class="history-mini-grid" id="miniNumberGrid"></div>
       </div>
-      <div class="history-card">
-        <p class="history-card-title">最近开出记录</p>
-        <div class="history-timeline" id="historyTimeline"></div>
-      </div>
+      <section class="time-filter-section" aria-labelledby="timeFilterLabel">
+        <p id="timeFilterLabel" class="time-filter-title">时间范围筛选</p>
+        <div class="time-btn-group">
+          <button type="button" class="time-btn" data-days="7">一周</button>
+          <button type="button" class="time-btn" data-days="15">半个月</button>
+          <button type="button" class="time-btn active" data-days="30">一个月</button>
+          <button type="button" class="time-btn" data-days="90">三个月</button>
+          <button type="button" class="time-btn" data-days="180">半年</button>
+          <button type="button" class="time-btn" data-days="365">一年</button>
+        </div>
+        <div class="time-stats-result">
+          <div class="time-stat-box te">
+            <span class="time-stat-label">所选期间特码开出</span>
+            <strong id="statTeCount" class="time-stat-value num">0 次</strong>
+          </div>
+          <div class="time-stat-box ping">
+            <span class="time-stat-label">所选期间平码开出</span>
+            <strong id="statPingCount" class="time-stat-value num">0 次</strong>
+          </div>
+        </div>
+      </section>
+      <p class="history-section-label">往期开奖</p>
+      <p class="fine history-official-hint">按当前彩种展示每期全部号码，与上方所选分析号码无关。</p>
+      <div class="history-official" id="historyListContainer"></div>
     </div>
   </div>
-  <script src="engine.js?v=layout-1"></script>
+  <script src="engine.js?v=te-num-fix"></script>
   <script>
     const canvas = document.getElementById("petals");
     const ctx = canvas.getContext("2d");
