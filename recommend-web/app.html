@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>特码推荐</title>
-  <link rel="stylesheet" href="app.css?v=glass-ui">
+  <link rel="stylesheet" href="app.css?v=history-sheet">
 </head>
 <body>
   <svg class="branch" viewBox="0 0 480 230" aria-hidden="true">
@@ -18,17 +18,23 @@
   </svg>
   <canvas id="petals" aria-hidden="true"></canvas>
   <main id="app">
-    <section class="panel"><h2>正在计算</h2><p class="fine" id="status">1.8.3 正在读取最新开奖…</p></section>
+    <section class="panel"><h2>正在计算</h2><p class="fine" id="status">1.8.4 正在读取最新开奖…</p></section>
   </main>
   <div id="historyBackdrop" class="history-backdrop" hidden></div>
   <div id="historyModal" class="history-sheet" hidden aria-hidden="true" role="dialog" aria-labelledby="modalTitle">
-    <div class="history-handle" aria-hidden="true"></div>
-    <header class="history-head">
+    <div class="history-sheet-chrome">
+      <button type="button" class="sheet-grab glass-pressable" id="history-grab" aria-label="下滑收起历史统计">
+        <span class="dock-handle" aria-hidden="true"></span>
+        <span class="sheet-grab-title">历史统计</span>
+        <span class="sheet-grab-hint">下滑收起</span>
+      </button>
+    </div>
+    <header class="history-head history-sheet-drag">
       <div class="history-head-main">
         <span id="modalNumberBadge" class="history-badge num">17</span>
         <h3 id="modalTitle" class="history-title">号码 17 · 历史数据看板</h3>
       </div>
-      <button type="button" class="history-close" id="close-history" aria-label="关闭">✕</button>
+      <button type="button" class="history-close glass-pressable" id="close-history" aria-label="关闭">✕</button>
     </header>
     <div class="history-body">
       <div class="history-subtabs" id="historySubtabs">
@@ -66,7 +72,7 @@
       <div class="history-official" id="historyListContainer"></div>
     </div>
   </div>
-  <script src="engine.js?v=glass-ui"></script>
+  <script src="engine.js?v=history-sheet"></script>
   <script>
     const canvas = document.getElementById("petals");
     const ctx = canvas.getContext("2d");

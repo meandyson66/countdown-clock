@@ -303,7 +303,7 @@ async function loadDraws(kind) {
   const errors = [];
   for (let target = year - 1; target <= year; target += 1) {
     const url = `https://history.macaumarksix.com/history/${meta.code}/y/${target}`;
-    setSync("1.8.3 正在读取" + meta.name + " " + target);
+    setSync("1.8.4 正在读取" + meta.name + " " + target);
     try {
       const text = await httpGet(url);
       let body = null;
@@ -344,7 +344,7 @@ async function loadHongKongDrawsCustom() {
   for (let target = year - 1; target <= year; target += 1) {
     for (let page = 1; page <= 20; page += 1) {
       const url = HK_API.historyUrl(target, page);
-      setSync("1.8.3 正在读取香港 21:30 " + target + " 第" + page + "页");
+      setSync("1.8.4 正在读取香港 21:30 " + target + " 第" + page + "页");
       try {
         const text = await httpGet(url);
         const body = JSON.parse(text);
@@ -861,21 +861,30 @@ function consoleHtml() {
     const title = uniform ? "" : `<span class="who">${escapeHtml(item.name)}</span>`;
     return `<div class="preview-item" data-count="${item.numbers.length}" data-odds="${item.payoutOdds}">${title}<div><span>投入总额</span><strong class="num spent">—</strong></div><div><span>预计纯利</span><strong class="num profit">—</strong></div></div>`;
   }).join("") || `<div class="preview-item" data-count="0" data-odds="0"><div><span>投入总额</span><strong class="num spent">—</strong></div></div>`;
-  return `<section class="panel console">
+  return `<section class="panel console glass-console">
     <div class="toolbar action-bar header-actions">
-      <nav class="tabs tabs-5 stats-row">${tabs}<button type="button" class="tab-stats" id="open-history">历史统计</button></nav>
+      <nav class="tabs tabs-5 stats-row">${tabs}<button type="button" class="tab-stats glass-pressable" id="open-history">历史统计</button></nav>
       <div class="actions">
-        <button type="button" class="ghost" id="refresh">重新计算</button>
-        <button type="button" class="ghost" id="reset">重置本期</button>
+        <button type="button" class="ghost glass-pressable" id="refresh">重新计算</button>
+        <button type="button" class="ghost glass-pressable" id="reset">重置本期</button>
       </div>
     </div>
-    <form class="fund stats-container" id="stake-form">
-      <label class="field" for="stake"><span>单注</span><input id="stake" class="num" type="number" min="0.01" step="0.01" inputmode="decimal" value="${escapeHtml(value)}" required><button type="submit">保存</button></label>
-      <button type="button" class="info" aria-label="金额说明">i<span class="tip">${escapeHtml(tip)}</span></button>
-      <div class="previews">${previews}</div>
-    </form>
-    <p class="fine" id="sync">正在连接开奖数据…</p>
-  </section>`;
+  </section>
+  <aside class="bottom-dock jelly-dock" id="bottom-dock" aria-label="单注金额与预计收益">
+    <button type="button" class="dock-toggle glass-pressable" id="dock-toggle" aria-expanded="false" aria-controls="dock-body">
+      <span class="dock-handle" aria-hidden="true"></span>
+      <span class="dock-toggle-text">单注与投入</span>
+      <span class="dock-toggle-hint" data-collapsed="上滑或点按展开" data-expanded="下滑收起">上滑或点按展开</span>
+    </button>
+    <div class="dock-body" id="dock-body">
+      <form class="fund stats-container" id="stake-form">
+        <label class="field" for="stake"><span>单注</span><input id="stake" class="num glass-input" type="number" min="0.01" step="0.01" inputmode="decimal" value="${escapeHtml(value)}" required><button type="submit" class="glass-pressable glass-accent">保存</button></label>
+        <button type="button" class="info glass-pressable" aria-label="金额说明">i<span class="tip">${escapeHtml(tip)}</span></button>
+        <div class="previews">${previews}</div>
+      </form>
+      <p class="fine dock-sync" id="sync">正在连接开奖数据…</p>
+    </div>
+  </aside>`;
 }
 function paintStake() {
   const input = document.querySelector("#stake");
@@ -1102,23 +1111,113 @@ function openHistoryModal(number, kind) {
   const modal = document.getElementById("historyModal");
   const backdrop = document.getElementById("historyBackdrop");
   if (!modal || !backdrop) return;
+  setDockCollapsed(true);
+  modal.classList.remove("is-closing", "is-dragging");
+  modal.style.transform = "";
   modal.hidden = false;
   backdrop.hidden = false;
   modal.setAttribute("aria-hidden", "false");
   renderHistoryModal();
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => modal.classList.add("is-open"));
+  });
 }
 function closeHistoryModal() {
   const modal = document.getElementById("historyModal");
   const backdrop = document.getElementById("historyBackdrop");
-  if (modal) {
+  if (!modal || modal.hidden) return;
+  modal.classList.remove("is-open", "is-dragging");
+  modal.classList.add("is-closing");
+  modal.style.transform = "";
+  const finish = () => {
     modal.hidden = true;
+    modal.classList.remove("is-closing");
     modal.setAttribute("aria-hidden", "true");
+    if (backdrop) backdrop.hidden = true;
+  };
+  let closed = false;
+  const onEnd = (event) => {
+    if (event.target !== modal || event.propertyName !== "transform") return;
+    if (closed) return;
+    closed = true;
+    modal.removeEventListener("transitionend", onEnd);
+    finish();
+  };
+  modal.addEventListener("transitionend", onEnd);
+  setTimeout(() => {
+    if (closed) return;
+    closed = true;
+    modal.removeEventListener("transitionend", onEnd);
+    finish();
+  }, 560);
+}
+function bindHistorySheetDrag() {
+  const modal = document.getElementById("historyModal");
+  const grab = document.getElementById("history-grab");
+  const head = document.querySelector(".history-sheet-drag");
+  if (!modal || modal.dataset.dragBound === "1") return;
+  modal.dataset.dragBound = "1";
+  let startY = 0;
+  let dragY = 0;
+  let dragging = false;
+  let dragged = false;
+  const dragStarts = [grab, head].filter(Boolean);
+  const resetDrag = () => {
+    dragging = false;
+    dragY = 0;
+    modal.classList.remove("is-dragging");
+    modal.style.transform = "";
+  };
+  const snapOpen = () => {
+    resetDrag();
+    modal.classList.add("is-open");
+  };
+  dragStarts.forEach((el) => {
+    el.addEventListener("touchstart", (event) => {
+      if (modal.hidden || !modal.classList.contains("is-open")) return;
+      startY = event.touches[0].clientY;
+      dragging = true;
+      dragged = false;
+      modal.classList.add("is-dragging");
+    }, { passive: true });
+  });
+  modal.addEventListener("touchmove", (event) => {
+    if (!dragging) return;
+    const dy = event.touches[0].clientY - startY;
+    if (dy <= 0) return;
+    dragged = true;
+    dragY = dy;
+    modal.style.transform = `translateY(${dragY}px)`;
+  }, { passive: true });
+  const endDrag = () => {
+    if (!dragging) return;
+    const shouldClose = dragY > 72 || (dragged && dragY > 36);
+    const wasDragged = dragged;
+    dragging = false;
+    if (shouldClose) {
+      modal.classList.remove("is-dragging");
+      modal.style.transform = "";
+      closeHistoryModal();
+      return;
+    }
+    snapOpen();
+    if (wasDragged) {
+      setTimeout(() => { dragged = false; }, 80);
+    }
+  };
+  modal.addEventListener("touchend", endDrag, { passive: true });
+  modal.addEventListener("touchcancel", endDrag, { passive: true });
+  if (grab) {
+    grab.addEventListener("click", () => {
+      if (dragged) return;
+      closeHistoryModal();
+    });
   }
-  if (backdrop) backdrop.hidden = true;
 }
 function bindHistoryShell() {
   if (historyShellBound) return;
   historyShellBound = true;
+  bindHistorySheetDrag();
   const backdrop = document.getElementById("historyBackdrop");
   const closeBtn = document.getElementById("close-history");
   if (backdrop) backdrop.addEventListener("click", closeHistoryModal);
@@ -1187,6 +1286,50 @@ window.filterByTime = filterByTime;
 window.getCurrentGameType = getCurrentGameType;
 window.COLOR_RULES = COLOR_RULES;
 
+const DOCK_COLLAPSED_KEY = "macau-dock-collapsed";
+function setDockCollapsed(collapsed) {
+  const dock = document.getElementById("bottom-dock");
+  const toggle = document.getElementById("dock-toggle");
+  if (!dock) return;
+  dock.classList.toggle("is-collapsed", collapsed);
+  document.documentElement.classList.toggle("dock-collapsed", collapsed);
+  document.documentElement.classList.toggle("dock-expanded", !collapsed);
+  if (toggle) {
+    toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    const hint = toggle.querySelector(".dock-toggle-hint");
+    if (hint) {
+      hint.textContent = collapsed ? hint.dataset.collapsed : hint.dataset.expanded;
+    }
+  }
+  try { sessionStorage.setItem(DOCK_COLLAPSED_KEY, collapsed ? "1" : "0"); } catch (_) { /* ignore */ }
+}
+function dockDefaultCollapsed() {
+  try {
+    const saved = sessionStorage.getItem(DOCK_COLLAPSED_KEY);
+    if (saved === "0" || saved === "1") return saved === "1";
+  } catch (_) { /* ignore */ }
+  return true;
+}
+function initBottomDock() {
+  const dock = document.getElementById("bottom-dock");
+  const toggle = document.getElementById("dock-toggle");
+  if (!dock || !toggle || dock.dataset.bound === "1") return;
+  dock.dataset.bound = "1";
+  setDockCollapsed(dockDefaultCollapsed());
+  toggle.addEventListener("click", () => {
+    setDockCollapsed(!dock.classList.contains("is-collapsed"));
+  });
+  let touchY = 0;
+  dock.addEventListener("touchstart", (event) => {
+    touchY = event.touches[0].clientY;
+  }, { passive: true });
+  dock.addEventListener("touchend", (event) => {
+    const dy = event.changedTouches[0].clientY - touchY;
+    if (dy > 40) setDockCollapsed(true);
+    else if (dy < -40) setDockCollapsed(false);
+  }, { passive: true });
+}
+
 function bind() {
   document.querySelectorAll("[data-view]").forEach((link) => {
     link.addEventListener("click", (event) => {
@@ -1224,6 +1367,7 @@ function bind() {
     painted = "";
     render(true);
   });
+  initBottomDock();
 }
 function setSync(text) {
   const sync = document.querySelector("#sync");
@@ -1243,7 +1387,7 @@ async function runRefresh(replace) {
   if (isCalculating) return;
   isCalculating = true;
   errorLatched = false;
-  setSync(replace ? "1.8.3 正在重置本期…" : "1.8.3 正在读取最新开奖…");
+  setSync(replace ? "1.8.4 正在重置本期…" : "1.8.4 正在读取最新开奖…");
   try {
     const histories = {};
     for (let i = 0; i < KINDS.length; i += 1) {
@@ -1323,10 +1467,10 @@ function boot() {
       rows = cached.rows || [];
       render(true);
     } else {
-      document.querySelector("#app").innerHTML = `<section class="panel"><h2>正在计算</h2><p class="fine" id="status">1.8.3 正在读取最新开奖…</p></section>`;
+      document.querySelector("#app").innerHTML = `<section class="panel"><h2>正在计算</h2><p class="fine" id="status">1.8.4 正在读取最新开奖…</p></section>`;
     }
   } catch (error) {
-    document.querySelector("#app").innerHTML = `<section class="panel"><h2>正在计算</h2><p class="fine" id="status">1.8.3 正在读取最新开奖…</p></section>`;
+    document.querySelector("#app").innerHTML = `<section class="panel"><h2>正在计算</h2><p class="fine" id="status">1.8.4 正在读取最新开奖…</p></section>`;
   }
   runRefresh(false).finally(arm);
   setInterval(tick, 1000);
