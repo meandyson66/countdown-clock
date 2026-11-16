@@ -259,10 +259,20 @@ function httpGet(url) {
   });
 }
 
+function specialFromRaw(raw) {
+  const keys = ["special", "specialNum", "special_number", "tm", "te", "tema", "specialCode"];
+  for (let i = 0; i < keys.length; i += 1) {
+    const n = Number(raw[keys[i]]);
+    if (n >= 1 && n <= 49) return n;
+  }
+  return null;
+}
 function normalize(raw) {
   if (!raw || !raw.openCode || !raw.zodiac || !raw.openTime) return null;
-  const nums = String(raw.openCode).split(",").map((part) => Number(part)).filter((number) => number >= 1 && number <= 49);
-  const zodiacs = String(raw.zodiac).split(",").map(canonZodiac);
+  let nums = String(raw.openCode).split(/[,，+\s|]+/).map((part) => Number(part)).filter((number) => number >= 1 && number <= 49);
+  const zodiacs = String(raw.zodiac).split(/[,，]/).map(canonZodiac);
+  const picked = specialFromRaw(raw);
+  if (nums.length === 6 && picked != null) nums = nums.concat(picked);
   if (nums.length < 7 || zodiacs.length < nums.length) return null;
   const opened = String(raw.openTime);
   const date = opened.slice(0, 10);
@@ -270,13 +280,14 @@ function normalize(raw) {
   const useNums = nums.slice(0, zodiacs.length);
   const useZodiacs = zodiacs.slice(0, useNums.length);
   const expect = String(raw.expect || "");
+  const specialNum = picked != null ? picked : useNums[useNums.length - 1];
   return {
     expect,
     expectNum: /^\d+$/.test(expect) ? Number(expect) : 0,
     date,
     nums: useNums,
     zodiacs: useZodiacs,
-    special: useNums[useNums.length - 1],
+    special: specialNum,
     specialZodiac: useZodiacs[useZodiacs.length - 1],
   };
 }
@@ -992,21 +1003,38 @@ function histBallSpan(n, pos, draw, kind, isSpecial) {
   const index = yearIndex(draw);
   const zodiac = draw.zodiacs[pos] || zodiacOf(index, n);
   const wave = ballToneClass(n, kind);
-  const special = isSpecial ? " special" : "";
+  const teClass = isSpecial ? " hist-te-ma" : "";
   const role = isSpecial ? " te-code-ball" : " ping-code-ball";
-  return `<span class="hist-ball ${wave}${special}${role}"><b class="hist-ball-num">${pad2(n)}</b><small>${escapeHtml(zodiac)}·${escapeHtml(colorName(n, kind))}</small></span>`;
+  const num = Number(n);
+  const label = Number.isFinite(num) && num >= 1 && num <= 49 ? pad2(num) : "—";
+  return `<span class="hist-ball ${wave}${teClass}${role}"><b class="hist-ball-num">${label}</b><small>${escapeHtml(zodiac)}·${escapeHtml(colorName(num, kind))}</small></span>`;
+}
+function pickSpecialNumber(draw, nums) {
+  const fromField = Number(draw.special);
+  if (Number.isFinite(fromField) && fromField >= 1 && fromField <= 49) return fromField;
+  const altKeys = ["specialNum", "special_number", "tm", "te", "tema", "specialCode"];
+  for (let i = 0; i < altKeys.length; i += 1) {
+    const n = Number(draw[altKeys[i]]);
+    if (Number.isFinite(n) && n >= 1 && n <= 49) return n;
+  }
+  if (nums.length >= 7) return Number(nums[6]);
+  if (nums.length > 0) return Number(nums[nums.length - 1]);
+  return NaN;
 }
 function splitDrawNums(draw) {
   const nums = Array.isArray(draw.nums) ? draw.nums : [];
+  const special = pickSpecialNumber(draw, nums);
   if (nums.length >= 7) {
-    return { ping: nums.slice(0, 6), special: Number(draw.special ?? nums[6]), specialPos: 6 };
+    return { ping: nums.slice(0, 6), special, specialPos: 6 };
+  }
+  if (nums.length === 6 && Number.isFinite(special)) {
+    return { ping: nums.slice(0, 6), special, specialPos: 6 };
   }
   if (nums.length > 0) {
     const specialPos = nums.length - 1;
-    return { ping: nums.slice(0, specialPos), special: Number(draw.special ?? nums[specialPos]), specialPos };
+    return { ping: nums.slice(0, specialPos), special, specialPos };
   }
-  const solo = Number(draw.special);
-  return { ping: [], special: Number.isFinite(solo) ? solo : NaN, specialPos: 0 };
+  return { ping: [], special, specialPos: 0 };
 }
 function officialDrawCardHtml(draw, kind) {
   const dateAttr = escapeHtml(String(draw.date || ""));
@@ -1015,11 +1043,11 @@ function officialDrawCardHtml(draw, kind) {
   const pingRow = pingHtml || `<span class="fine">平码 —</span>`;
   const teBall = Number.isFinite(special) && special >= 1 && special <= 49
     ? histBallSpan(special, specialPos, draw, kind, true)
-    : `<span class="hist-ball special te-code-ball"><b class="hist-ball-num">—</b></span>`;
+    : `<span class="hist-ball hist-te-ma te-code-ball"><b class="hist-ball-num">—</b></span>`;
   return `<article class="history-draw-card history-period-item" data-date="${dateAttr}"><header><strong>${escapeHtml(draw.expect)}期</strong><time>${escapeHtml(drawTimeLabel(kind, draw))}</time></header>`
     + `<div class="history-draw-balls"><div class="history-draw-ping">${pingRow}</div>`
     + `<span class="history-draw-plus" aria-hidden="true">+</span>`
-    + `<div class="history-draw-special"><span class="history-te-tag">特码</span>${teBall}</div></div></article>`;
+    + `<div class="history-draw-special">${teBall}</div></div></article>`;
 }
 function renderOfficialHistoryList() {
   const root = document.getElementById("historyListContainer");
