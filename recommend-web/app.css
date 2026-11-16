@@ -590,34 +590,28 @@ h2 { margin: 0; font-size: 34px; font-weight: 720; letter-spacing: .03em; color:
 .history-draw-balls {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 10px;
-  align-items: center;
+  gap: 8px;
+  align-items: flex-start;
 }
 .history-draw-ping {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: flex-end;
-  flex: 1 1 auto;
-  min-width: 0;
+  display: contents;
 }
 .history-draw-plus {
   flex: 0 0 auto;
-  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 32px;
+  font-size: 14px;
   font-weight: 700;
   color: #d63384;
   line-height: 1;
-  padding: 0 2px;
+  padding: 0;
+  margin: 0;
 }
 .history-draw-special {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 4px;
-  flex: 0 0 auto;
-  min-width: 46px;
-  padding: 4px 2px 2px;
+  display: contents;
 }
 .history-te-tag {
   display: block;
@@ -627,10 +621,10 @@ h2 { margin: 0; font-size: 34px; font-weight: 720; letter-spacing: .03em; color:
   letter-spacing: 0.05em;
   line-height: 1.2;
 }
-.history-draw-special .hist-ball {
+.history-draw-balls .hist-ball {
   flex-shrink: 0;
 }
-.history-draw-special .hist-ball-num {
+.hist-ball-num {
   min-width: 32px;
   min-height: 32px;
 }
@@ -680,19 +674,16 @@ h2 { margin: 0; font-size: 34px; font-weight: 720; letter-spacing: .03em; color:
 @keyframes hist-te-glow {
   0%, 100% {
     box-shadow:
-      0 0 0 2px #fff,
-      0 0 0 4px #e11d48,
-      0 4px 14px rgba(225, 29, 72, 0.35),
-      0 0 18px rgba(255, 117, 151, 0.4);
-    transform: scale(1);
+      0 6px 16px rgba(59, 34, 48, 0.16),
+      inset 0 2px 5px rgba(255, 255, 255, 0.4),
+      0 0 0 2px rgba(225, 29, 72, 0.35);
   }
   50% {
     box-shadow:
-      0 0 0 2px #fff,
-      0 0 0 6px #ff5c8a,
-      0 6px 20px rgba(225, 29, 72, 0.45),
-      0 0 28px rgba(255, 150, 175, 0.65);
-    transform: scale(1.04);
+      0 6px 16px rgba(59, 34, 48, 0.16),
+      inset 0 2px 5px rgba(255, 255, 255, 0.4),
+      0 0 0 3px rgba(255, 117, 151, 0.5),
+      0 0 12px rgba(255, 117, 151, 0.35);
   }
 }
 @keyframes hist-te-ring {
@@ -700,60 +691,47 @@ h2 { margin: 0; font-size: 34px; font-weight: 720; letter-spacing: .03em; color:
   70% { transform: scale(1.35); opacity: 0; }
   100% { transform: scale(1.35); opacity: 0; }
 }
-.history-draw-special .hist-ball.hist-te-ma {
+.history-draw-balls .hist-ball.hist-te-ma {
   position: relative;
-  padding: 6px;
+  padding: 0;
 }
-.history-draw-special .hist-ball.hist-te-ma::after {
+.history-draw-balls .hist-ball.hist-te-ma::after {
   content: "";
   position: absolute;
   left: 50%;
-  top: 6px;
-  width: 38px;
-  height: 38px;
-  margin-left: -19px;
+  top: 0;
+  width: 32px;
+  height: 32px;
+  margin-left: -16px;
   border-radius: 50%;
-  border: 2px solid rgba(255, 117, 151, 0.55);
+  border: 1px solid rgba(255, 117, 151, 0.45);
   pointer-events: none;
   animation: hist-te-ring 2.4s ease-out infinite;
 }
-.history-draw-special .hist-ball.hist-te-ma b {
-  width: 38px;
-  height: 38px;
-  font-size: 15px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+.history-draw-balls .hist-ball.hist-te-ma b {
+  width: 32px;
+  height: 32px;
+  font-size: 13px;
+  font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
   animation: hist-te-glow 2.4s ease-in-out infinite;
   position: relative;
   z-index: 1;
 }
-.history-draw-special .hist-ball.hist-te-ma.red b {
-  background:
-    linear-gradient(160deg, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0) 38%),
-    linear-gradient(135deg, #ffc4d6 0%, #ff5c8a 48%, #e11d48 100%);
-}
-.history-draw-special .hist-ball.hist-te-ma.blue b {
-  background:
-    linear-gradient(160deg, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0) 38%),
-    linear-gradient(135deg, #dbeafe 0%, #60a5fa 48%, #2563eb 100%);
-}
-.history-draw-special .hist-ball.hist-te-ma.green b {
-  background:
-    linear-gradient(160deg, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0) 38%),
-    linear-gradient(135deg, #dcfce7 0%, #4ade80 48%, #16a34a 100%);
-}
-.history-draw-special .hist-ball.hist-te-ma small {
+.history-draw-balls .hist-ball.hist-te-ma small {
   font-weight: 600;
-  color: #c2185b;
+  color: #888;
 }
 @media (prefers-reduced-motion: reduce) {
-  .history-draw-special .hist-ball.hist-te-ma b,
-  .history-draw-special .hist-ball.hist-te-ma::after {
+  .history-draw-balls .hist-ball.hist-te-ma b,
+  .history-draw-balls .hist-ball.hist-te-ma::after {
     animation: none;
   }
-  .history-draw-special .hist-ball.hist-te-ma b {
-    box-shadow: 0 0 0 2px #fff, 0 0 0 4px #e11d48, 0 4px 12px rgba(225, 29, 72, 0.3);
+  .history-draw-balls .hist-ball.hist-te-ma b {
+    box-shadow:
+      0 6px 16px rgba(59, 34, 48, 0.16),
+      inset 0 2px 5px rgba(255, 255, 255, 0.4),
+      0 0 0 2px rgba(225, 29, 72, 0.35);
   }
 }
 .history-section-label {
@@ -1222,8 +1200,8 @@ button.ghost { font: inherit; cursor: pointer; }
   .tabs a.on::after,
   .jelly-dock .dock-handle,
   .history-sheet .dock-handle,
-  .history-draw-special .hist-ball.hist-te-ma b,
-  .history-draw-special .hist-ball.hist-te-ma::after {
+  .history-draw-balls .hist-ball.hist-te-ma b,
+  .history-draw-balls .hist-ball.hist-te-ma::after {
     animation: none !important;
   }
   .panel:hover,

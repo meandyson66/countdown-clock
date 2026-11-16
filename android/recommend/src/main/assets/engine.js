@@ -303,7 +303,7 @@ async function loadDraws(kind) {
   const errors = [];
   for (let target = year - 1; target <= year; target += 1) {
     const url = `https://history.macaumarksix.com/history/${meta.code}/y/${target}`;
-    setSync("2.0 正在读取" + meta.name + " " + target);
+    setSync("2.0.1 正在读取" + meta.name + " " + target);
     try {
       const text = await httpGet(url);
       let body = null;
@@ -344,7 +344,7 @@ async function loadHongKongDrawsCustom() {
   for (let target = year - 1; target <= year; target += 1) {
     for (let page = 1; page <= 20; page += 1) {
       const url = HK_API.historyUrl(target, page);
-      setSync("2.0 正在读取香港 21:30 " + target + " 第" + page + "页");
+      setSync("2.0.1 正在读取香港 21:30 " + target + " 第" + page + "页");
       try {
         const text = await httpGet(url);
         const body = JSON.parse(text);
@@ -1054,9 +1054,7 @@ function officialDrawCardHtml(draw, kind) {
     ? histBallSpan(special, specialPos, draw, kind, true)
     : `<span class="hist-ball hist-te-ma te-code-ball"><b class="hist-ball-num">—</b></span>`;
   return `<article class="history-draw-card history-period-item" data-date="${dateAttr}"><header><strong>${escapeHtml(draw.expect)}期</strong><time>${escapeHtml(drawTimeLabel(kind, draw))}</time></header>`
-    + `<div class="history-draw-balls"><div class="history-draw-ping">${pingRow}</div>`
-    + `<span class="history-draw-plus" aria-hidden="true">+</span>`
-    + `<div class="history-draw-special">${teBall}</div></div></article>`;
+    + `<div class="history-draw-balls">${pingRow}<span class="history-draw-plus" aria-hidden="true">+</span>${teBall}</div></article>`;
 }
 function renderOfficialHistoryList() {
   const root = document.getElementById("historyListContainer");
@@ -1456,7 +1454,7 @@ async function runRefresh(replace) {
   if (isCalculating) return;
   isCalculating = true;
   errorLatched = false;
-  setSync(replace ? "2.0 正在重置本期…" : "2.0 正在读取最新开奖…");
+  setSync(replace ? "2.0.1 正在重置本期…" : "2.0.1 正在读取最新开奖…");
   try {
     const histories = {};
     for (let i = 0; i < KINDS.length; i += 1) {
@@ -1536,10 +1534,10 @@ function boot() {
       rows = cached.rows || [];
       render(true);
     } else {
-      document.querySelector("#app").innerHTML = `<section class="panel"><h2>正在计算</h2><p class="fine" id="status">2.0 正在读取最新开奖…</p></section>`;
+      document.querySelector("#app").innerHTML = `<section class="panel"><h2>正在计算</h2><p class="fine" id="status">2.0.1 正在读取最新开奖…</p></section>`;
     }
   } catch (error) {
-    document.querySelector("#app").innerHTML = `<section class="panel"><h2>正在计算</h2><p class="fine" id="status">2.0 正在读取最新开奖…</p></section>`;
+    document.querySelector("#app").innerHTML = `<section class="panel"><h2>正在计算</h2><p class="fine" id="status">2.0.1 正在读取最新开奖…</p></section>`;
   }
   runRefresh(false).finally(arm);
   setInterval(tick, 1000);
