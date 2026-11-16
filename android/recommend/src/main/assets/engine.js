@@ -623,8 +623,24 @@ function stageHtml(payload) {
     <p class="fine">更新于 ${escapeHtml(payload.updatedAt)}</p>
   </section>`;
 }
+function ledgerKinds() {
+  if (view === "all") return ["new", "old"];
+  return [view];
+}
+function ledgerRows() {
+  if (view === "all") return rows;
+  return rows.filter((row) => row["类型"] === view);
+}
+function viewFromHash() {
+  const key = (location.hash || "#all").replace(/^#/, "");
+  return key === "new" || key === "old" || key === "all" ? key : "all";
+}
+function syncHash(next) {
+  const target = `#${next}`;
+  if (location.hash !== target) history.replaceState(null, "", target);
+}
 function summaryHtml() {
-  return ["new", "old"].map((kind) => {
+  return ledgerKinds().map((kind) => {
     const group = rows.filter((row) => row["类型"] === kind);
     if (!group.length) return "";
     const settled = group.filter((row) => row["是否命中"] === "命中" || row["是否命中"] === "未中");
@@ -637,7 +653,12 @@ function summaryHtml() {
 }
 function ledgerHtml() {
   if (!rows.length) return `<section class="panel"><h2>实盘对账</h2><p class="fine">还没有记录。打开应用就会写入本期推荐，开奖后自动对账。</p></section>`;
-  const shown = rows.slice().reverse().slice(0, 60);
+  const filtered = ledgerRows();
+  const summary = summaryHtml();
+  if (!filtered.length) {
+    return `<section class="panel"><div class="ledger-head"><h2>实盘对账</h2>${summary ? `<div class="capsules">${summary}</div>` : ""}</div><p class="fine">当前视图下还没有对账记录。</p></section>`;
+  }
+  const shown = filtered.slice().reverse().slice(0, 60);
   const body = shown.map((row) => {
     const state = row["是否命中"] || "";
     const toneName = { "命中": "hit", "未中": "miss", "待开奖": "pending" }[state] || "";
@@ -759,7 +780,10 @@ function bind() {
   document.querySelectorAll("[data-view]").forEach((link) => {
     link.addEventListener("click", (event) => {
       event.preventDefault();
-      view = link.dataset.view;
+      const next = link.dataset.view;
+      if (next !== "new" && next !== "old" && next !== "all") return;
+      view = next;
+      syncHash(next);
       painted = "";
       render(true);
     });
@@ -859,6 +883,14 @@ function showFailure(message) {
 }
 
 function boot() {
+  view = viewFromHash();
+  addEventListener("hashchange", () => {
+    const next = viewFromHash();
+    if (next === view) return;
+    view = next;
+    painted = "";
+    render(true);
+  });
   try {
     const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
     if (cached && cached.payloads) {
