@@ -2,18 +2,12 @@
 android/.gradle/
 android/**/build/
 android/local.properties
-android/findmatch/src/main/assets/
 
 # Python 推荐（本地密钥与虚拟环境）
 recommend/.venv/
 recommend/.env
 recommend/__pycache__/
 recommend/cache/
-
-# Node / Vite (SyncLab)
-node_modules/
-dist/
-gh-pages-bundle/
 
 # 安装包与杂项
 *.apk
