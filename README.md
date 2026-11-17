@@ -1,10 +1,24 @@
+# countdown-clock
+
+个人小工具合集。作者：[meandyson66](https://github.com/meandyson66)
+
+## 寻伴 FindMatch（附近交友演示）
+
+| 方式 | 链接 |
+|------|------|
+| **网页预览** | [打开寻伴](https://meandyson66.github.io/countdown-clock/findmatch/) |
+| 安卓 APK | [Actions 构建产物](https://github.com/meandyson66/countdown-clock/actions/workflows/findmatch-apk.yml) 或 [Release](https://github.com/meandyson66/countdown-clock/releases) |
+| 文档 | [FINDMATCH.md](./FINDMATCH.md) |
+
+源码目录：`src/` · 安卓模块：`android/findmatch/`（`com.meandyson.findmatch`）
+
+---
+
 # 澳门特码推荐 1.7（新澳门 21:32 · 老澳门 22:32）
 
-开源的 **澳门六合彩特码** 缩水推荐工具：自动读取公开历史开奖，四层漏斗过滤，输出 6～8 个高性价比特码，含回测胜率、连错风控与实盘对账。支持 **网页直接使用** 与 **安卓 APK** 安装，无需自建 Python 后端。本仓库亦含樱花倒计时等个人小项目。
+开源的 **澳门六合彩特码** 缩水推荐工具：自动读取公开历史开奖，四层漏斗过滤，输出 6～8 个高性价比特码，含回测胜率、连错风控与实盘对账。支持 **网页直接使用** 与 **安卓 APK** 安装，无需自建 Python 后端。
 
-> 作者：[meandyson66](https://github.com/meandyson66) · 在线演示见下方链接
-
-## 一键使用
+## 一键使用（特码推荐）
 
 | 方式 | 说明 | 链接 |
 |------|------|------|
